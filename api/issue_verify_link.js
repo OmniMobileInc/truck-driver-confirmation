@@ -340,6 +340,7 @@ export default async function handler(req, res) {
 
     const load_id = safe(body.load_id);
     const dock_email = safe(body.dock_email).toLowerCase();
+    const facility_id = safe(body.facility_id);
 
     const carrier_company = safe(body.carrier_company);
     const dispatch_contact = safe(body.dispatch_contact);
@@ -387,6 +388,7 @@ export default async function handler(req, res) {
       issued_by_email,
       load_id,
       dock_email,
+      facility_id: facility_id || null,
 
       carrier_company,
       dispatch_contact,
