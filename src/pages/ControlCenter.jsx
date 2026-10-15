@@ -62,6 +62,7 @@ export default function ControlCenter() {
 
   const [loadId, setLoadId] = useState("");
   const [dockEmail, setDockEmail] = useState("");
+  const [facilityId, setFacilityId] = useState("");
   const [carrierCompany, setCarrierCompany] = useState("");
   const [carrierContact, setCarrierContact] = useState("");
   const [carrierPhone, setCarrierPhone] = useState("");
@@ -246,6 +247,7 @@ export default function ControlCenter() {
       issued_by_email: email,
       load_id: loadId.trim(),
       dock_email: dockEmail.trim().toLowerCase(),
+      facility_id: facilityId.trim(),
       carrier_company: carrierCompany.trim(),
       dispatch_contact: carrierContact.trim(),
       dispatch_phone: formatPhone(carrierPhone),
@@ -317,6 +319,7 @@ export default function ControlCenter() {
 
       setLoadId("");
       setDockEmail("");
+      setFacilityId("");
       setCarrierCompany("");
       setCarrierContact("");
       setCarrierPhone("");
@@ -609,6 +612,7 @@ export default function ControlCenter() {
             <div style={{ display: "grid", gap: 10 }}>
               <input ref={loadRef} style={styles.input} placeholder="Load ID" value={loadId} onChange={(e) => setLoadId(e.target.value)} onKeyDown={handleIssueEnter} />
               <input style={styles.input} placeholder="Shipper Email" value={dockEmail} onChange={(e) => setDockEmail(e.target.value)} onKeyDown={handleIssueEnter} />
+              <input style={styles.input} placeholder="Facility ID (optional)" value={facilityId} onChange={(e) => setFacilityId(e.target.value)} onKeyDown={handleIssueEnter} />
               <input style={styles.input} placeholder="Carrier Company" value={carrierCompany} onChange={(e) => setCarrierCompany(e.target.value)} onKeyDown={handleIssueEnter} />
               <input style={styles.input} placeholder="Carrier Contact Name" value={carrierContact} onChange={(e) => setCarrierContact(e.target.value)} onKeyDown={handleIssueEnter} />
               <input style={styles.input} placeholder="Carrier Contact Phone" value={carrierPhone} onChange={(e) => setCarrierPhone(formatPhone(e.target.value))} onKeyDown={handleIssueEnter} />
