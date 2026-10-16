@@ -80,7 +80,9 @@ try {
     <React.StrictMode>
       <ThemeProvider>
         <SitewideThemeToggle />
-        <App />
+        <div className="qc-app-shell">
+          <App />
+        </div>
       </ThemeProvider>
     </React.StrictMode>
   );

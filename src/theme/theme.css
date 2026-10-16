@@ -16,17 +16,17 @@ html[data-theme="light"] body {
   background: #f0f4f8 !important;
 }
 
-html[data-theme="light"] #root {
+html[data-theme="light"] .qc-app-shell {
   min-height: 100vh;
   background: #0f1722;
   filter: invert(1) hue-rotate(180deg);
 }
 
-html[data-theme="light"] #root img,
-html[data-theme="light"] #root picture,
-html[data-theme="light"] #root video,
-html[data-theme="light"] #root canvas,
-html[data-theme="light"] #root iframe {
+html[data-theme="light"] .qc-app-shell img,
+html[data-theme="light"] .qc-app-shell picture,
+html[data-theme="light"] .qc-app-shell video,
+html[data-theme="light"] .qc-app-shell canvas,
+html[data-theme="light"] .qc-app-shell iframe {
   filter: invert(1) hue-rotate(180deg);
 }
 
@@ -64,6 +64,12 @@ html[data-theme="light"] #root iframe {
   right: 12px;
   z-index: 10000;
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+}
+
+html[data-theme="light"] .qc-theme-toggle--sitewide {
+  border-color: #25364a;
+  background: #0f1722;
+  color: #ffffff;
 }
 
 @media (max-width: 720px) {
