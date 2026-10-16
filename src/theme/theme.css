@@ -1,0 +1,66 @@
+:root {
+  color-scheme: dark;
+}
+
+html[data-theme="light"] {
+  color-scheme: light;
+}
+
+/*
+ * Much of the beta UI intentionally uses inline dark-theme colors. Inverting
+ * the app shell gives every current and future page a dependable light view
+ * without leaving isolated dark panels behind. Hue rotation preserves the
+ * blue status and action colors; media is inverted back to its original look.
+ */
+html[data-theme="light"] body {
+  background: #f0f4f8 !important;
+}
+
+html[data-theme="light"] #root {
+  min-height: 100vh;
+  background: #0f1722;
+  filter: invert(1) hue-rotate(180deg);
+}
+
+html[data-theme="light"] #root img,
+html[data-theme="light"] #root picture,
+html[data-theme="light"] #root video,
+html[data-theme="light"] #root canvas,
+html[data-theme="light"] #root iframe {
+  filter: invert(1) hue-rotate(180deg);
+}
+
+.qc-theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.09);
+  color: #ffffff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 850;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.qc-theme-toggle:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.qc-theme-toggle:focus-visible {
+  outline: 3px solid #8bc5ff;
+  outline-offset: 2px;
+}
+
+@media (max-width: 720px) {
+  .qc-theme-toggle {
+    min-height: 38px;
+    padding: 8px 11px;
+  }
+}
