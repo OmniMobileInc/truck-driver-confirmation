@@ -58,6 +58,14 @@ html[data-theme="light"] #root iframe {
   outline-offset: 2px;
 }
 
+.qc-theme-toggle--sitewide {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 10000;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+}
+
 @media (max-width: 720px) {
   .qc-theme-toggle {
     min-height: 38px;
