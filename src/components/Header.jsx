@@ -1,6 +1,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { clearAuth, getAuthEmail } from "../utils/auth.js";
+import { useTheme } from "../theme/ThemeProvider.jsx";
 
 function logout() {
   clearAuth();
@@ -9,6 +10,7 @@ function logout() {
 
 export default function Header() {
   const signedIn = !!getAuthEmail();
+  const { theme, toggle } = useTheme();
 
   return (
     <div style={styles.header}>
@@ -53,12 +55,34 @@ export default function Header() {
               Admin
             </Link>
 
+            <button
+              type="button"
+              onClick={toggle}
+              className="qc-theme-toggle"
+              aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} background`}
+              title={`Switch to ${theme === "dark" ? "light" : "dark"} background`}
+            >
+              <span aria-hidden="true">{theme === "dark" ? "☀️" : "🌙"}</span>
+              <span>{theme === "dark" ? "Light" : "Dark"}</span>
+            </button>
+
             <button onClick={logout} style={styles.logoutBtn}>
               Log Out
             </button>
           </>
         ) : (
           <>
+            <button
+              type="button"
+              onClick={toggle}
+              className="qc-theme-toggle"
+              aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} background`}
+              title={`Switch to ${theme === "dark" ? "light" : "dark"} background`}
+            >
+              <span aria-hidden="true">{theme === "dark" ? "☀️" : "🌙"}</span>
+              <span>{theme === "dark" ? "Light" : "Dark"}</span>
+            </button>
+
             <Link to="/how-it-works" style={styles.link}>
               How It Works
             </Link>
