@@ -2,10 +2,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { getAuthEmail, isBrokerOrShipper, clearAuth } from "../utils/auth.js";
+import { useTheme } from "../theme/ThemeProvider.jsx";
 
 export default function PublicHeader() {
   const nav = useNavigate();
   const loc = useLocation();
+  const { theme, toggle } = useTheme();
 
   const [email, setEmail] = useState(() => getAuthEmail());
 
@@ -120,6 +122,17 @@ export default function PublicHeader() {
         </div>
 
         <div style={row}>
+          <button
+            type="button"
+            className="qc-theme-toggle"
+            onClick={toggle}
+            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} background`}
+            title={`Switch to ${theme === "dark" ? "light" : "dark"} background`}
+          >
+            <span aria-hidden="true">{theme === "dark" ? "☀️" : "🌙"}</span>
+            <span>{theme === "dark" ? "Light" : "Dark"}</span>
+          </button>
+
           {authorized ? (
             <>
               <button style={btn(true)} onClick={() => nav("/dashboard")}>

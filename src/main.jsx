@@ -2,6 +2,8 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App.jsx";
+import { ThemeProvider } from "./theme/ThemeProvider.jsx";
+import "./theme/theme.css";
 
 function showFatal(message) {
   try {
@@ -58,7 +60,9 @@ window.addEventListener("unhandledrejection", (e) => {
 try {
   ReactDOM.createRoot(document.getElementById("root")).render(
     <React.StrictMode>
-      <App />
+      <ThemeProvider>
+        <App />
+      </ThemeProvider>
     </React.StrictMode>
   );
 } catch (e) {
