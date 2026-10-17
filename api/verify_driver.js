@@ -180,7 +180,7 @@ export default async function handler(req, res) {
     if (isSuccessfulClosedStatus(link.status)) {
       return res.status(200).json({
         result: "CLEAR_TO_LOAD",
-        ...carrierPayload(link, token, link.cleared_at || "")
+        ...carrierPayload(link, token, "")
       });
     }
 
@@ -238,9 +238,9 @@ export default async function handler(req, res) {
     if (result === "CLEAR_TO_LOAD") {
       const { data: closedLink, error: closeError } = await supabase
         .from("verify_links")
-        .update({ status: "cleared", cleared_at: nowIso })
+        .update({ status: "cleared" })
         .eq("token", token)
-        .select("status,cleared_at")
+        .select("status")
         .maybeSingle();
 
       if (closeError || !closedLink || String(closedLink.status || "").toLowerCase() !== "cleared") {
