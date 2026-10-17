@@ -178,9 +178,9 @@ export default async function handler(req, res) {
     }
 
     if (isSuccessfulClosedStatus(link.status)) {
-      return res.status(200).json({
-        result: "CLEAR_TO_LOAD",
-        ...carrierPayload(link, token, "")
+      return res.status(410).json({
+        error: "Verification already completed",
+        completed: true
       });
     }
 
