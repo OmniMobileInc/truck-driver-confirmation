@@ -303,6 +303,29 @@ font-size:22px;
 font-weight:900;
 color:#fff;
 }
+
+.completedBox{
+max-width:760px;
+margin:auto;
+background:rgba(18,105,55,.24);
+border:1px solid rgba(92,220,135,.55);
+border-radius:18px;
+padding:34px 26px;
+box-shadow:0 14px 40px rgba(0,0,0,.35);
+}
+
+.completedTitle{
+font-size:34px;
+font-weight:900;
+color:#6fff8d;
+margin-bottom:12px;
+}
+
+.completedSub{
+font-size:22px;
+font-weight:900;
+color:#fff;
+}
 </style>
 </head>
 
@@ -469,6 +492,17 @@ document.body.innerHTML = `
 `;
 }
 
+function showCompletedScreen(){
+document.body.innerHTML = `
+  <div class="revokedWrap">
+    <div class="completedBox">
+      <div class="completedTitle">✅ VERIFICATION COMPLETED</div>
+      <div class="completedSub">LINK CLOSED</div>
+    </div>
+  </div>
+`;
+}
+
 async function loadDriverPhone(){
 const token=getToken()
 if(!token)return
@@ -489,6 +523,11 @@ if(res.ok){
 if(String(data.status||"").toLowerCase()==="revoked"){
 verificationRevoked=true
 showRevokedScreen()
+return
+}
+
+if(["cleared","completed"].includes(String(data.status||"").toLowerCase())){
+showCompletedScreen()
 return
 }
 
@@ -545,6 +584,12 @@ showRevokedScreen()
 return
 }
 
+
+if(detailRes.ok && ["cleared","completed"].includes(String(detailData.status||"").toLowerCase())){
+showCompletedScreen()
+return
+}
+
 const res=await fetch("/api/verify_driver",{
 method:"POST",
 headers:{"Content-Type":"application/json"},
@@ -559,6 +604,10 @@ driver_answered:driverAnswered
 const data=await res.json()
 
 if(!res.ok){
+if(data.completed){
+showCompletedScreen()
+return
+}
 result.innerText=data.error||"Verification Error"
 result.className="result caution"
 return
