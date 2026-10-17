@@ -16,6 +16,65 @@ text-align:center;
 transition:background .2s ease;
 }
 
+body.lightMode{
+background:#edf3fb;
+color:#142033;
+}
+
+body.lightMode .container{
+background:#ffffff;
+border-color:#aebed2;
+box-shadow:0 14px 40px rgba(35,55,80,.18);
+}
+
+body.lightMode .fieldLabel,
+body.lightMode .callTitle,
+body.lightMode .answerTitle,
+body.lightMode .authorityValue{
+color:#142033;
+}
+
+body.lightMode input,
+body.lightMode .callBox,
+body.lightMode .answerBtn,
+body.lightMode .authority{
+background:#e4ebf4;
+border-color:#aebed2;
+color:#142033;
+}
+
+body.lightMode .answerBtn.activeYes{
+background:#ccebd6;
+border-color:#2c9654;
+}
+
+body.lightMode .answerBtn.activeNo{
+background:#f3cccc;
+border-color:#b94949;
+}
+
+.themeToggle{
+position:fixed;
+top:14px;
+right:14px;
+z-index:20;
+padding:9px 13px;
+border-radius:10px;
+border:1px solid rgba(143,199,255,.55);
+background:#173a63;
+color:#fff;
+font-size:14px;
+font-weight:900;
+cursor:pointer;
+box-shadow:0 4px 14px rgba(0,0,0,.2);
+}
+
+body.lightMode .themeToggle{
+background:#ffffff;
+color:#142033;
+border-color:#738ba8;
+}
+
 .container{
 max-width:760px;
 margin:auto;
@@ -249,6 +308,8 @@ color:#fff;
 
 <body>
 
+<button id="themeToggle" class="themeToggle" type="button" onclick="toggleTheme()" aria-label="Switch color theme">☀️ Light</button>
+
 <div class="container" id="appContainer">
 
 <div class="hero">AdbS TRUCK-DRIVER VERIFICATION</div>
@@ -333,6 +394,31 @@ QueCab AdbS — Developed by Omnimobile Inc. for QueCab Inc.
 let soundEnabled=true
 let driverAnswered=null
 let verificationRevoked=false
+
+function preferredTheme(){
+const saved=localStorage.getItem("qc_theme")
+if(saved==="light"||saved==="dark")return saved
+return "dark"
+}
+
+function applyTheme(theme){
+const isLight=theme==="light"
+document.body.classList.toggle("lightMode",isLight)
+const button=document.getElementById("themeToggle")
+if(button)button.innerText=isLight?"🌙 Dark":"☀️ Light"
+}
+
+function toggleTheme(){
+const next=document.body.classList.contains("lightMode")?"dark":"light"
+localStorage.setItem("qc_theme",next)
+applyTheme(next)
+}
+
+function formatLocalTimestamp(value){
+if(!value)return new Date().toLocaleString()
+const parsed=new Date(value)
+return Number.isNaN(parsed.getTime())?String(value):parsed.toLocaleString()
+}
 
 function toggleSound(){
 soundEnabled=!soundEnabled
@@ -478,7 +564,7 @@ document.getElementById("carrierCompany").innerText=data.carrier_company||"(not 
 document.getElementById("carrierContact").innerText=data.carrier_contact_name||"(not provided)"
 document.getElementById("carrierPhone").innerText=data.carrier_contact_phone||"(not provided)"
 document.getElementById("verificationId").innerText=data.verification_id||"(unknown)"
-document.getElementById("verificationTime").innerText=data.verified_at||new Date().toLocaleString()
+document.getElementById("verificationTime").innerText=formatLocalTimestamp(data.verified_at)
 
 document.getElementById("authority").style.display="block"
 
@@ -501,6 +587,7 @@ result.className="result caution"
 }
 }
 
+applyTheme(preferredTheme())
 loadDriverPhone()
 </script>
 
