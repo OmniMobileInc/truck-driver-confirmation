@@ -40,6 +40,11 @@ function carrierPayload(link, token, verifiedAt = "") {
   };
 }
 
+function isSuccessfulClosedStatus(status) {
+  const normalized = String(status || "").trim().toLowerCase();
+  return normalized === "cleared" || normalized === "completed";
+}
+
 async function sendAlertEmail(link, token, failedAttempts) {
   try {
     if (!process.env.RESEND_API_KEY) {
@@ -168,7 +173,11 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: "Verification link not found" });
     }
 
-    if (String(link.status || "").toLowerCase() === "cleared") {
+    if (String(link.status || "").trim().toLowerCase() === "revoked") {
+      return res.status(410).json({ error: "Verification link revoked" });
+    }
+
+    if (isSuccessfulClosedStatus(link.status)) {
       return res.status(200).json({
         result: "CLEAR_TO_LOAD",
         ...carrierPayload(link, token, link.cleared_at || "")
@@ -227,15 +236,25 @@ export default async function handler(req, res) {
     }
 
     if (result === "CLEAR_TO_LOAD") {
-      await supabase
+      const { data: closedLink, error: closeError } = await supabase
         .from("verify_links")
         .update({ status: "cleared", cleared_at: nowIso })
-        .eq("token", token);
+        .eq("token", token)
+        .select("status,cleared_at")
+        .maybeSingle();
+
+      if (closeError || !closedLink || String(closedLink.status || "").toLowerCase() !== "cleared") {
+        console.error("verify_driver close link failed", closeError || "No updated row returned");
+        return res.status(500).json({
+          error: "Verification succeeded, but the link could not be closed safely. Do not reuse this link.",
+          detail: closeError?.message || "No updated row returned"
+        });
+      }
     }
 
     return res.status(200).json({
       result,
-      ...carrierPayload(link, token, new Date().toLocaleString()),
+      ...carrierPayload(link, token, nowIso),
       debug: {
         failedAttempts: fails,
         alertTriggered,
