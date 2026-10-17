@@ -2,26 +2,8 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App.jsx";
-import { ThemeProvider, useTheme } from "./theme/ThemeProvider.jsx";
+import { ThemeProvider } from "./theme/ThemeProvider.jsx";
 import "./theme/theme.css";
-
-function SitewideThemeToggle() {
-  const { theme, toggle } = useTheme();
-  const nextTheme = theme === "dark" ? "light" : "dark";
-
-  return (
-    <button
-      type="button"
-      onClick={toggle}
-      className="qc-theme-toggle qc-theme-toggle--sitewide"
-      aria-label={`Switch to ${nextTheme} background`}
-      title={`Switch to ${nextTheme} background`}
-    >
-      <span aria-hidden="true">{theme === "dark" ? "☀️" : "🌙"}</span>
-      <span>{theme === "dark" ? "Light" : "Dark"}</span>
-    </button>
-  );
-}
 
 function showFatal(message) {
   try {
@@ -79,7 +61,6 @@ try {
   ReactDOM.createRoot(document.getElementById("root")).render(
     <React.StrictMode>
       <ThemeProvider>
-        <SitewideThemeToggle />
         <div className="qc-app-shell">
           <App />
         </div>
