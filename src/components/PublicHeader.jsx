@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { getAuthEmail, isBrokerOrShipper, clearAuth } from "../utils/auth.js";
+import ThemeToggle from "./ThemeToggle.jsx";
 
 export default function PublicHeader() {
   const nav = useNavigate();
@@ -120,6 +121,8 @@ export default function PublicHeader() {
         </div>
 
         <div style={row}>
+          <ThemeToggle />
+
           {authorized ? (
             <>
               <button style={btn(true)} onClick={() => nav("/dashboard")}>
