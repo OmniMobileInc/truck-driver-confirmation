@@ -1,8 +1,10 @@
 import { Link } from "react-router-dom";
+import ThemeToggle from "../components/ThemeToggle.jsx";
 
 export default function Home() {
   return (
     <div style={styles.wrapper}>
+      <ThemeToggle className="qc-theme-toggle--home" />
       <div style={styles.steelGlow} />
       <div style={styles.gridOverlay} />
 
