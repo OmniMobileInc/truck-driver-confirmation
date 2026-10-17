@@ -1,6 +1,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { clearAuth, getAuthEmail } from "../utils/auth.js";
+import ThemeToggle from "./ThemeToggle.jsx";
 
 function logout() {
   clearAuth();
@@ -21,6 +22,8 @@ export default function Header() {
       <div style={styles.right}>
         {signedIn ? (
           <>
+            <ThemeToggle />
+
             <Link to="/dashboard" style={styles.link}>
               Control Center
             </Link>
@@ -59,6 +62,8 @@ export default function Header() {
           </>
         ) : (
           <>
+            <ThemeToggle />
+
             <Link to="/how-it-works" style={styles.link}>
               How It Works
             </Link>
