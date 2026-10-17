@@ -558,6 +558,12 @@ driver_answered:driverAnswered
 
 const data=await res.json()
 
+if(!res.ok){
+result.innerText=data.error||"Verification Error"
+result.className="result caution"
+return
+}
+
 renderPhone(data.driver_phone||"")
 
 document.getElementById("carrierCompany").innerText=data.carrier_company||"(not provided)"
