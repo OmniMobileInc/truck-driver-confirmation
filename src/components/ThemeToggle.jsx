@@ -1,28 +1,19 @@
-import { getTheme, setTheme } from '../utils/theme.js'
+import { useTheme } from '../theme/ThemeProvider.jsx'
 
-export default function ThemeToggle() {
-  const cur = getTheme()
-  const isLight = cur === 'light'
-  const isDark  = cur !== 'light'
+export default function ThemeToggle({ className = '' }) {
+  const { theme, toggle } = useTheme()
+  const nextTheme = theme === 'dark' ? 'light' : 'dark'
 
   return (
-    <div style={{ display:'flex', gap:8 }}>
-      <button
-        type="button"
-        className="btn"
-        onClick={() => setTheme('light')}
-        style={{ opacity: isLight ? 1 : 0.6 }}
-      >
-        Light
-      </button>
-      <button
-        type="button"
-        className="btn"
-        onClick={() => setTheme('dark')}
-        style={{ opacity: isDark ? 1 : 0.6 }}
-      >
-        Dark
-      </button>
-    </div>
+    <button
+      type="button"
+      onClick={toggle}
+      className={`qc-theme-toggle ${className}`.trim()}
+      aria-label={`Switch to ${nextTheme} background`}
+      title={`Switch to ${nextTheme} background`}
+    >
+      <span aria-hidden="true">{theme === 'dark' ? '☀️' : '🌙'}</span>
+      <span>{theme === 'dark' ? 'Light' : 'Dark'}</span>
+    </button>
   )
 }
