@@ -13,6 +13,7 @@ import LiveSessions from "./pages/LiveSessions.jsx";
 import Account from "./pages/Account.jsx";
 import BetaNotice from "./pages/BetaNotice.jsx";
 import Pricing from "./pages/Pricing.jsx";
+import DockPortal from "./pages/DockPortal.jsx";
 
 import Footer from "./components/Footer.jsx";
 import RequireActiveSubscription from "./components/RequireActiveSubscription.jsx";
@@ -57,6 +58,7 @@ export default function App() {
               }
             />
 
+            <Route path="/dock" element={<DockPortal />} />
             <Route path="/login" element={<Login />} />
             <Route path="/join" element={<Join />} />
             <Route path="/pricing" element={<Pricing />} />
