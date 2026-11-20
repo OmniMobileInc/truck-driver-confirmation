@@ -1,0 +1,18 @@
+{
+  "name": "QueCab AdbS Dock Portal",
+  "short_name": "AdbS Dock",
+  "description": "Secure facility verification queue",
+  "start_url": "/dock",
+  "scope": "/dock",
+  "display": "standalone",
+  "background_color": "#101923",
+  "theme_color": "#101923",
+  "icons": [
+    {
+      "src": "/qc-logo.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
