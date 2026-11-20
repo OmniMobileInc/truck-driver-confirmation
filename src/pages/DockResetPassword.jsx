@@ -12,6 +12,7 @@ export default function DockResetPassword() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [done, setDone] = useState(false);
+  const [checked, setChecked] = useState(false);
 
   useEffect(() => {
     if (!supabase) return;
@@ -38,7 +39,7 @@ export default function DockResetPassword() {
         setMessage("Open the password recovery link from your email to set a password.");
       }
     }
-    initialize();
+    initialize().finally(() => { if (alive) setChecked(true); });
     return () => { alive = false; subscription.unsubscribe(); };
   }, []);
 
@@ -67,7 +68,7 @@ export default function DockResetPassword() {
         <label htmlFor="confirm-password">Confirm password</label>
         <input id="confirm-password" style={input} type="password" autoComplete="new-password" required minLength={12} value={confirm} onChange={e => setConfirm(e.target.value)} />
         <button disabled={busy} style={{ padding: "14px 20px", borderRadius: 8, background: "#21649c", color: "white", border: "1px solid #87b6e0", fontWeight: 700 }}>{busy ? "Saving…" : "Save Password"}</button>
-      </form> : <p>Checking your recovery link…</p>}
+      </form> : !checked ? <p>Checking your recovery link…</p> : null}
       {message && <p role="alert" style={{ color: "#ffd7d7" }}>{message}</p>}
       <p><a style={{ color: "#9bc8ff" }} href="/dock">Return to Dock Portal</a></p>
     </div>
