@@ -14,6 +14,8 @@ export default function DockPortal() {
   const [busy, setBusy] = useState(false);
   const [ready, setReady] = useState(false);
   const [installPrompt, setInstallPrompt] = useState(null);
+  const [recoveryMode, setRecoveryMode] = useState(false);
+  const [notice, setNotice] = useState("");
 
   useEffect(() => {
     const manifest = document.createElement("link");
@@ -57,6 +59,17 @@ export default function DockPortal() {
     setBusy(false);
   }
 
+  async function sendRecovery(event) {
+    event.preventDefault();
+    setBusy(true); setError(""); setNotice("");
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: window.location.origin + "/dock/reset"
+    });
+    if (resetError) setError("Unable to send recovery email. Please try again or contact your facility administrator.");
+    else setNotice("If this email has a facility account, a password recovery link will arrive shortly.");
+    setBusy(false);
+  }
+
   if (!supabase) return <main style={style}><h1>QueCab AdbS™ — Dock Portal</h1><p>Setup pending: configure Supabase public URL and anon key.</p></main>;
 
   return <main style={style}>
@@ -68,15 +81,18 @@ export default function DockPortal() {
       </header>
       {!ready ? <p>Loading secure sign-in…</p> : !session ?
         <section style={{ maxWidth: 500, padding: "28px", border: "1px solid #55758f", borderRadius: 16, background: "#172b3e", boxShadow: "0 14px 35px #080e1699" }}>
-          <h2 style={{ marginTop: 0 }}>Facility Sign In</h2>
-          <p style={{ color: "#c3d4e5" }}>Authorized facility personnel only. Use your assigned email and password.</p>
-          <form onSubmit={signIn}>
+          <h2 style={{ marginTop: 0 }}>{recoveryMode ? "Set or Reset Your Password" : "Facility Sign In"}</h2>
+          <p style={{ color: "#c3d4e5" }}>{recoveryMode ? "Enter your facility email to receive a secure password recovery link." : "Authorized facility personnel only. Use your assigned email and password."}</p>
+          <form onSubmit={recoveryMode ? sendRecovery : signIn}>
             <label htmlFor="dock-email">Work email</label>
             <input id="dock-email" style={input} type="email" autoComplete="username" required value={email} onChange={event => setEmail(event.target.value)} placeholder="name@facility.com" />
-            <label htmlFor="dock-password">Password</label>
+            {!recoveryMode && <><label htmlFor="dock-password">Password</label>
             <input id="dock-password" style={input} type="password" autoComplete="current-password" required value={password} onChange={event => setPassword(event.target.value)} placeholder="Your password" />
-            <button style={button} disabled={busy}>{busy ? "Signing in…" : "Sign In to Dock Portal"}</button>
+            </>}
+            <button style={button} disabled={busy}>{busy ? "Please wait…" : recoveryMode ? "Send Password Recovery Email" : "Sign In to Dock Portal"}</button>
           </form>
+          <button type="button" style={{ marginTop: 18, background: "transparent", border: 0, color: "#9bc8ff", textDecoration: "underline", cursor: "pointer" }} onClick={() => { setRecoveryMode(!recoveryMode); setError(""); setNotice(""); }}>{recoveryMode ? "Back to sign in" : "Set or forgot your password?"}</button>
+          {notice && <p role="status">{notice}</p>}
         </section> :
         <section>
           <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: 16 }}>
