@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import Header from "../components/Header.jsx";
-import { LS_EMAIL, isBrokerOrShipper } from "../utils/auth.js";
+import { LS_EMAIL, getAuthCode, getAuthEmail, isBrokerOrShipper } from "../utils/auth.js";
 
 function fmtDate(v) {
   if (!v) return "(unknown)";
@@ -97,6 +97,7 @@ export default function LiveSessions() {
 
   const email = (localStorage.getItem(LS_EMAIL) || "").trim();
   const authorized = !!email && isBrokerOrShipper(email);
+  const brokerHeaders = () => ({ "x-adbs-broker-email": getAuthEmail(), "x-adbs-broker-code": getAuthCode() });
 
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -127,7 +128,7 @@ export default function LiveSessions() {
       setErrorMsg("");
 
       try {
-        const res = await fetch("/api/live_sessions?status=active&limit=50");
+        const res = await fetch("/api/live_sessions?status=active&limit=50", { headers: brokerHeaders() });
         const data = await res.json();
 
         if (!res.ok || !data?.ok) {
@@ -175,7 +176,7 @@ export default function LiveSessions() {
     try {
       const res = await fetch("/api/manage_verify_link", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...brokerHeaders() },
         body: JSON.stringify({ action: "detail", token })
       });
       const data = await safeJson(res);
