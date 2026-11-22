@@ -174,7 +174,7 @@ export default function ControlCenter() {
 
     const res = await fetch("/api/manage_verify_link", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "x-adbs-broker-email": getAuthEmail(), "x-adbs-broker-code": getAuthCode() },
       body: JSON.stringify({ action: "detail", token })
     });
 
@@ -206,7 +206,7 @@ export default function ControlCenter() {
     try {
       const res = await fetch("/api/manage_verify_link", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-adbs-broker-email": getAuthEmail(), "x-adbs-broker-code": getAuthCode() },
         body: JSON.stringify({ action: "lookup", token: q })
       });
 
@@ -347,7 +347,7 @@ export default function ControlCenter() {
     try {
       const res = await fetch("/api/manage_verify_link", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-adbs-broker-email": getAuthEmail(), "x-adbs-broker-code": getAuthCode() },
         body: JSON.stringify({
           action: "set_status",
           token: selected.verification_id,
