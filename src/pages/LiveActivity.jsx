@@ -1,3 +1,4 @@
+import { getAuthEmail, getAuthCode } from "../utils/auth.js";
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -83,7 +84,7 @@ export default function LiveActivity() {
     try {
       const res = await fetch("/api/manage_verify_link", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-adbs-broker-email": getAuthEmail(), "x-adbs-broker-code": getAuthCode() },
         body: JSON.stringify({
           action: "detail",
           token
@@ -129,7 +130,7 @@ export default function LiveActivity() {
     try {
       const res = await fetch("/api/manage_verify_link", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-adbs-broker-email": getAuthEmail(), "x-adbs-broker-code": getAuthCode() },
         body: JSON.stringify({
           action: "lookup",
           token: q
