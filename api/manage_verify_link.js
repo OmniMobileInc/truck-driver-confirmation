@@ -1,3 +1,4 @@
+import { requireBroker } from "./_broker_auth.js";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -96,21 +97,23 @@ function compactRow(req, link, attempts = []) {
   };
 }
 
-async function fetchLinkByToken(token) {
+async function fetchLinkByToken(token, brokerEmail) {
   const { data, error } = await supabase
     .from("verify_links")
     .select("*")
     .eq("token", token)
+    .ilike("issued_by_email", brokerEmail)
     .maybeSingle();
 
   if (error) throw new Error(error.message || "Token lookup failed.");
   return data || null;
 }
 
-async function fetchManyByField(field, value, mode = "eq") {
+async function fetchManyByField(field, value, brokerEmail, mode = "eq") {
   let query = supabase
     .from("verify_links")
     .select("*")
+    .ilike("issued_by_email", brokerEmail)
     .order("created_at", { ascending: false })
     .limit(25);
 
@@ -125,44 +128,44 @@ async function fetchManyByField(field, value, mode = "eq") {
   return Array.isArray(data) ? data : [];
 }
 
-async function broadLookupMany(raw) {
+async function broadLookupMany(raw, brokerEmail) {
   const q = safeStr(raw);
   if (!q) return [];
 
   const directToken = tokenFromAny(q);
 
   {
-    const link = await fetchLinkByToken(directToken);
+    const link = await fetchLinkByToken(directToken, brokerEmail);
     if (link) return [link];
   }
 
   {
-    const rows = await fetchManyByField("load_id", q, "eq");
+    const rows = await fetchManyByField("load_id", q, brokerEmail, "eq");
     if (rows.length) return rows;
   }
 
   if (q.includes("@")) {
-    const rows = await fetchManyByField("dock_email", q.toLowerCase(), "eq");
+    const rows = await fetchManyByField("dock_email", q.toLowerCase(), brokerEmail, "eq");
     if (rows.length) return rows;
   }
 
   if (onlyDigits(q).length >= 7) {
-    const rows = await fetchManyByField("driver_phone", formatPhoneHyphen(q), "eq");
+    const rows = await fetchManyByField("driver_phone", formatPhoneHyphen(q), brokerEmail, "eq");
     if (rows.length) return rows;
   }
 
   if (onlyDigits(q).length >= 4) {
-    const rows = await fetchManyByField("usdot_on_record", onlyDigits(q), "eq");
+    const rows = await fetchManyByField("usdot_on_record", onlyDigits(q), brokerEmail, "eq");
     if (rows.length) return rows;
   }
 
   {
-    const rows = await fetchManyByField("plate_on_record", q.toUpperCase(), "eq");
+    const rows = await fetchManyByField("plate_on_record", q.toUpperCase(), brokerEmail, "eq");
     if (rows.length) return rows;
   }
 
   {
-    const rows = await fetchManyByField("carrier_company", `%${q}%`, "ilike");
+    const rows = await fetchManyByField("carrier_company", `%${q}%`, brokerEmail, "ilike");
     if (rows.length) return rows;
   }
 
@@ -176,6 +179,8 @@ export default async function handler(req, res) {
 
   try {
     const body = typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {});
+    const brokerEmail = await requireBroker(req, supabase);
+    if (!brokerEmail) return json(res, 401, { ok: false, error: "Broker sign-in required." });
     const action = safeStr(body.action).toLowerCase();
 
     if (action === "lookup") {
@@ -187,7 +192,7 @@ export default async function handler(req, res) {
         });
       }
 
-      const rows = await broadLookupMany(raw);
+      const rows = await broadLookupMany(raw, brokerEmail);
 
       if (!rows.length) {
         return json(res, 404, { ok: false, error: "Verification not found." });
@@ -212,7 +217,7 @@ export default async function handler(req, res) {
         return json(res, 400, { ok: false, error: "Missing token." });
       }
 
-      const link = await fetchLinkByToken(token);
+      const link = await fetchLinkByToken(token, brokerEmail);
       if (!link) {
         return json(res, 404, { ok: false, error: "Verification not found." });
       }
@@ -250,10 +255,16 @@ export default async function handler(req, res) {
         return json(res, 400, { ok: false, error: "Invalid status." });
       }
 
+      const owned = await fetchLinkByToken(token, brokerEmail);
+      if (!owned) return json(res, 404, { ok: false, error: "Verification not found." });
+      if (["locked", "cleared", "completed"].includes(String(owned.status || "").toLowerCase()) && status === "active") {
+        return json(res, 409, { ok: false, error: "Completed or locked verifications cannot be reactivated." });
+      }
       const { data, error } = await supabase
         .from("verify_links")
         .update({ status })
         .eq("token", token)
+        .ilike("issued_by_email", brokerEmail)
         .select("*")
         .maybeSingle();
 
