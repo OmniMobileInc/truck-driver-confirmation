@@ -251,19 +251,35 @@ export default async function handler(req, res) {
         return json(res, 400, { ok: false, error: "Missing token or status." });
       }
 
-      if (!["active", "revoked", "locked", "cleared"].includes(status)) {
-        return json(res, 400, { ok: false, error: "Invalid status." });
+      // Brokers may revoke an active link or reactivate a revoked, never-attempted link.
+      // Verification outcomes are exclusively set by the server-side verification process.
+      if (!["active", "revoked"].includes(status)) {
+        return json(res, 403, { ok: false, error: "Verification results cannot be manually assigned." });
       }
 
       const owned = await fetchLinkByToken(token, brokerEmail);
       if (!owned) return json(res, 404, { ok: false, error: "Verification not found." });
-      if (["locked", "cleared", "completed"].includes(String(owned.status || "").toLowerCase()) && status !== "revoked") {
-        return json(res, 409, { ok: false, error: "Completed or locked verifications cannot be reactivated." });
+      const current = String(owned.status || "").toLowerCase();
+      if (status === "revoked" && current !== "active") {
+        return json(res, 409, { ok: false, error: "Only active verifications may be revoked." });
+      }
+      if (status === "active") {
+        if (current !== "revoked") {
+          return json(res, 409, { ok: false, error: "Only revoked verifications may be reactivated." });
+        }
+        const attempts = await fetchAttemptsForToken(token);
+        if (attempts.length) {
+          return json(res, 409, { ok: false, error: "A verification with recorded attempts cannot be reactivated." });
+        }
+        if (owned.expires_at && new Date(owned.expires_at).getTime() <= Date.now()) {
+          return json(res, 409, { ok: false, error: "Expired verifications cannot be reactivated." });
+        }
       }
       const { data, error } = await supabase
         .from("verify_links")
         .update({ status })
         .eq("token", token)
+        .eq("status", current)
         .ilike("issued_by_email", brokerEmail)
         .select("*")
         .maybeSingle();
