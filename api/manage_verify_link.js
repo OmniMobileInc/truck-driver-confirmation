@@ -257,7 +257,7 @@ export default async function handler(req, res) {
 
       const owned = await fetchLinkByToken(token, brokerEmail);
       if (!owned) return json(res, 404, { ok: false, error: "Verification not found." });
-      if (["locked", "cleared", "completed"].includes(String(owned.status || "").toLowerCase()) && status === "active") {
+      if (["locked", "cleared", "completed"].includes(String(owned.status || "").toLowerCase()) && status !== "revoked") {
         return json(res, 409, { ok: false, error: "Completed or locked verifications cannot be reactivated." });
       }
       const { data, error } = await supabase
