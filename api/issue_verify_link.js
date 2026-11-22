@@ -1,3 +1,4 @@
+import { requireBroker } from "./_broker_auth.js";
 import crypto from "crypto";
 import { createClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
@@ -325,7 +326,8 @@ export default async function handler(req, res) {
         ? JSON.parse(req.body)
         : req.body || {};
 
-    const issued_by_email = safe(body.issued_by_email).toLowerCase();
+    const issued_by_email = await requireBroker(req, supabase);
+    if (!issued_by_email) return json(res, 401, { ok: false, error: "Broker sign-in required." });
 
     const limitCheck = await enforceMonthlyLimit(issued_by_email);
 
