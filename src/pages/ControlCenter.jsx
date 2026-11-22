@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import Header from "../components/Header.jsx";
-import { getAuthEmail, isBrokerOrShipper } from "../utils/auth.js";
+import { getAuthEmail, getAuthCode, isBrokerOrShipper } from "../utils/auth.js";
 
 function onlyDigits(s) {
   return String(s || "").replace(/\D/g, "");
@@ -284,7 +284,7 @@ export default function ControlCenter() {
     try {
       const res = await fetch("/api/issue_verify_link", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-adbs-broker-email": getAuthEmail(), "x-adbs-broker-code": getAuthCode() },
         body: JSON.stringify(payload)
       });
 
