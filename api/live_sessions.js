@@ -1,3 +1,4 @@
+import { requireBroker } from "./_broker_auth.js";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -29,12 +30,15 @@ export default async function handler(req, res) {
   }
 
   try {
+    const brokerEmail = await requireBroker(req, supabase);
+    if (!brokerEmail) return json(res, 401, { ok: false, error: "Broker sign-in required." });
     const status = safeStr(req.query?.status || "active").toLowerCase();
     const limit = Math.max(1, Math.min(100, Number(req.query?.limit || 50)));
 
     let query = supabase
       .from("verify_links")
       .select("*")
+      .ilike("issued_by_email", brokerEmail)
       .order("created_at", { ascending: false })
       .limit(limit);
 
