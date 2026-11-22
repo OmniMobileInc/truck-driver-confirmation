@@ -173,87 +173,52 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: "Verification link not found" });
     }
 
-    if (String(link.status || "").trim().toLowerCase() === "revoked") {
-      return res.status(410).json({ error: "Verification link revoked" });
+    // All attempt checks, inserts and status changes happen under a single
+    // database row lock. The browser cannot bypass the three-strike limit.
+    const { data: attempt, error: attemptError } = await supabase.rpc(
+      "adbs_record_driver_attempt",
+      {
+        p_token: token,
+        p_entered_usdot: enteredDOT,
+        p_entered_plate: enteredPlate,
+        p_driver_answered: driverAnswered
+      }
+    );
+
+    if (attemptError) {
+      console.error("atomic verification failed", attemptError);
+      return res.status(500).json({ error: "Verification unavailable. Do not release the load." });
     }
 
-    if (isSuccessfulClosedStatus(link.status)) {
-      return res.status(410).json({
-        error: "Verification already completed",
-        completed: true
-      });
+    const state = String(attempt?.state || "").toLowerCase();
+    if (state === "not_found") return res.status(404).json({ error: "Verification link not found" });
+    if (state === "revoked") return res.status(410).json({ error: "Verification link revoked" });
+    if (state === "locked" && !attempt?.result) {
+      return res.status(423).json({ error: "Verification locked after three failed attempts.", locked: true });
+    }
+    if ((state === "cleared" || state === "completed") && !attempt?.result) {
+      return res.status(410).json({ error: "Verification already completed", completed: true });
+    }
+    if (!attempt?.result) {
+      return res.status(500).json({ error: "Verification unavailable. Do not release the load." });
     }
 
-    const match =
-      enteredDOT === onlyDigits(link.usdot_on_record) &&
-      enteredPlate === upper(link.plate_on_record) &&
-      driverAnswered;
-
-    const result = match ? "CLEAR_TO_LOAD" : "CAUTION_ALERT";
-    const nowIso = new Date().toISOString();
-
-    const { error: insertError } = await supabase
-      .from("verify_checks")
-      .insert({
-        token,
-        entered_usdot: enteredDOT,
-        entered_plate: enteredPlate,
-        driver_answered: driverAnswered,
-        result,
-        checked_at: nowIso
-      });
-
-    if (insertError) {
-      return res.status(500).json({
-        error: "Failed to log verification attempt",
-        detail: insertError.message || String(insertError)
-      });
-    }
-
-    const { data: attempts, error: attemptsError } = await supabase
-      .from("verify_checks")
-      .select("result")
-      .eq("token", token);
-
-    if (attemptsError) {
-      return res.status(500).json({
-        error: "Failed to read verification attempts",
-        detail: attemptsError.message || String(attemptsError)
-      });
-    }
-
-    const fails = (attempts || []).filter((a) => a.result === "CAUTION_ALERT").length;
-
-    let alertTriggered = false;
+    const result = attempt.result;
+    const nowIso = attempt.verified_at;
+    const fails = Number(attempt.failed_attempts || 0);
+    const alertTriggered = attempt.alert_triggered === true;
     let alertSent = false;
     let alertError = null;
-
-    if (fails === 3) {
-      alertTriggered = true;
+    if (alertTriggered) {
       const alertResult = await sendAlertEmail(link, token, fails);
       alertSent = !!alertResult.ok;
       alertError = alertResult.ok ? null : alertResult.error || "Alert send failed";
-    }
-
-    if (result === "CLEAR_TO_LOAD") {
-      const { data: closedLink, error: closeError } = await supabase
-        .from("verify_links")
-        .update({ status: "cleared" })
-        .eq("token", token)
-        .select("status")
-        .maybeSingle();
-
-      if (closeError || !closedLink || String(closedLink.status || "").toLowerCase() !== "cleared") {
-        console.error("verify_driver close link failed", closeError || "No updated row returned");
-        return res.status(500).json({
-          error: "Verification succeeded, but the link could not be closed safely. Do not reuse this link.",
-          detail: closeError?.message || "No updated row returned"
-        });
-      }
+      if (!alertSent) console.error("Three-strike alert delivery failed", alertError);
     }
 
     return res.status(200).json({
       result,
+      locked: state === "locked",
       ...carrierPayload(link, token, nowIso),
       debug: {
         failedAttempts: fails,
