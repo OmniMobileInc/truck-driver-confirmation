@@ -193,12 +193,9 @@ function buildEmailHtml({
           }
         </div>
 
-        <div style="margin-bottom:8px;">
-          <strong>USDOT#:</strong> ${safe(usdot) || "(not provided)"}
-        </div>
-
-        <div style="margin-bottom:8px;">
-          <strong>Plate:</strong> ${safe(plate) || "(not provided)"}
+        <div style="margin-bottom:8px;color:#cbd7e8;">
+          Read the USDOT number and license plate directly from the truck.
+          Do not copy these values from paperwork or carrier communications.
         </div>
 
         <div>
