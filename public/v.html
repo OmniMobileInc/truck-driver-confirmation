@@ -492,6 +492,17 @@ document.body.innerHTML = `
 `;
 }
 
+function showLockedScreen(){
+document.body.innerHTML = `
+  <div class="revokedWrap">
+    <div class="revokedBox">
+      <div class="revokedTitle">⚠️ VERIFICATION LOCKED</div>
+      <div class="revokedSub">THREE FAILED ATTEMPTS — DO NOT LOAD</div>
+    </div>
+  </div>
+`;
+}
+
 function showCompletedScreen(){
 document.body.innerHTML = `
   <div class="revokedWrap">
@@ -520,6 +531,11 @@ token
 const data=await res.json()
 
 if(res.ok){
+if(String(data.status||"").toLowerCase()==="locked"){
+showLockedScreen()
+return
+}
+
 if(String(data.status||"").toLowerCase()==="revoked"){
 verificationRevoked=true
 showRevokedScreen()
@@ -578,6 +594,11 @@ token
 })
 const detailData=await detailRes.json().catch(()=>({}))
 
+if(detailRes.ok && String(detailData.status||"").toLowerCase()==="locked"){
+showLockedScreen()
+return
+}
+
 if(detailRes.ok && String(detailData.status||"").toLowerCase()==="revoked"){
 verificationRevoked=true
 showRevokedScreen()
@@ -604,12 +625,21 @@ driver_answered:driverAnswered
 const data=await res.json()
 
 if(!res.ok){
+if(data.locked){
+showLockedScreen()
+return
+}
 if(data.completed){
 showCompletedScreen()
 return
 }
 result.innerText=data.error||"Verification Error"
 result.className="result caution"
+return
+}
+
+if(data.locked){
+showLockedScreen()
 return
 }
 
