@@ -17,7 +17,9 @@ export default async function handler(req, res) {
     const notStarted = data.starts_at && new Date(data.starts_at).getTime() > now;
     return res.status(200).json({
       ok: true,
-      status: expired ? "expired" : notStarted ? "pending" : String(data.status || "active").toLowerCase(),
+      status: ["locked", "revoked", "cleared", "completed"].includes(String(data.status || "").toLowerCase())
+        ? String(data.status).toLowerCase()
+        : expired ? "expired" : notStarted ? "pending" : String(data.status || "active").toLowerCase(),
       token: data.token,
       driver_phone: data.driver_phone || "",
       carrier_company: data.carrier_company || "",
