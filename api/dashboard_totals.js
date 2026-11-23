@@ -38,8 +38,12 @@ export default async function handler(req, res) {
   }
 
   try {
-    const email = await requireBroker(req, supabase);
-    if (!email) return res.status(401).json({ ok: false, error: "Broker sign-in required." });
+    const adminKey = String(req.headers["x-adbs-admin-key"] || "").trim();
+    const isAdmin = !!process.env.ADBS_ADMIN_KEY && adminKey === process.env.ADBS_ADMIN_KEY;
+    const brokerEmail = isAdmin ? null : await requireBroker(req, supabase);
+    if (!isAdmin && !brokerEmail) return res.status(401).json({ ok: false, error: "Sign-in required." });
+    const email = isAdmin ? normalizeEmail(req.query?.email) : brokerEmail;
+    if (!email) return res.status(400).json({ ok: false, error: "Account email required." });
 
     let linksQuery = supabase
       .from("verify_links")
