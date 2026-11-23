@@ -514,6 +514,11 @@ document.body.innerHTML = `
 `;
 }
 
+function showUnavailableScreen(status){
+  const pending=status==="pending";
+  document.body.innerHTML = `<div class="revokedWrap"><div class="revokedBox"><div class="revokedTitle">⚠️ VERIFICATION ${pending?"NOT YET ACTIVE":"EXPIRED"}</div><div class="revokedSub">DO NOT LOAD — CONTACT THE BROKER</div></div></div>`;
+}
+
 async function loadDriverPhone(){
 const token=getToken()
 if(!token)return
@@ -539,6 +544,11 @@ return
 
 if(["cleared","completed"].includes(String(data.status||"").toLowerCase())){
 showCompletedScreen()
+return
+}
+
+if(["pending","expired"].includes(String(data.status||"").toLowerCase())){
+showUnavailableScreen(String(data.status).toLowerCase())
 return
 }
 
@@ -598,6 +608,11 @@ return
 
 if(detailRes.ok && ["cleared","completed"].includes(String(detailData.status||"").toLowerCase())){
 showCompletedScreen()
+return
+}
+
+if(detailRes.ok && ["pending","expired"].includes(String(detailData.status||"").toLowerCase())){
+showUnavailableScreen(String(detailData.status).toLowerCase())
 return
 }
 
