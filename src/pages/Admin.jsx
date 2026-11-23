@@ -276,7 +276,8 @@ export default function Admin() {
 
     try {
       const accountRes = await fetch(
-        `/api/account_update?email=${encodeURIComponent(e)}`
+        `/api/account_update?email=${encodeURIComponent(e)}`,
+        { headers: { "x-adbs-admin-key": adminKey || "" } }
       );
 
       const accountData = await accountRes.json().catch(() => ({}));
