@@ -136,7 +136,8 @@ export default function Account() {
 
     try {
       const res = await fetch(
-        `/api/account_update?email=${encodeURIComponent(accountEmail)}`
+        `/api/account_update?email=${encodeURIComponent(accountEmail)}`,
+        { headers: { "x-adbs-broker-email": getAuthEmail(), "x-adbs-broker-code": getAuthCode() } }
       );
 
       const data = await res.json().catch(() => ({}));
@@ -195,7 +196,7 @@ export default function Account() {
     try {
       const res = await fetch("/api/account_update", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-adbs-broker-email": getAuthEmail(), "x-adbs-broker-code": getAuthCode() },
         body: JSON.stringify({
           current_email: email,
           business_email: newEmail,
