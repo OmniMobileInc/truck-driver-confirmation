@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import Header from "../components/Header.jsx";
-import { getAuthEmail } from "../utils/auth.js";
+import { getAuthEmail, getAuthCode } from "../utils/auth.js";
 
 function clean(v) {
   return String(v || "").trim();
@@ -100,7 +100,8 @@ export default function Account() {
   async function loadUsage(accountEmail, limitValue, bonusValue) {
     try {
       const res = await fetch(
-        `/api/dashboard_totals?email=${encodeURIComponent(accountEmail)}`
+        `/api/dashboard_totals`,
+        { headers: { "x-adbs-broker-email": getAuthEmail(), "x-adbs-broker-code": getAuthCode() } }
       );
 
       const data = await res.json().catch(() => ({}));
