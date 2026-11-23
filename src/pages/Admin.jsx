@@ -295,7 +295,8 @@ export default function Admin() {
 
       try {
         const totalsRes = await fetch(
-          `/api/dashboard_totals?email=${encodeURIComponent(e)}`
+          `/api/dashboard_totals?email=${encodeURIComponent(e)}`,
+          { headers: { "x-adbs-admin-key": adminKey || "" } }
         );
 
         const totalsData = await totalsRes.json().catch(() => ({}));
