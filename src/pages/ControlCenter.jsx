@@ -124,7 +124,7 @@ export default function ControlCenter() {
     setTotalsError("");
 
     try {
-      const res = await fetch("/api/dashboard_totals");
+      const res = await fetch("/api/dashboard_totals", { headers: { "x-adbs-broker-email": getAuthEmail(), "x-adbs-broker-code": getAuthCode() } });
       const data = await safeJson(res);
 
       if (!res.ok || data?.ok === false) {
