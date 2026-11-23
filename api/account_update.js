@@ -1,3 +1,4 @@
+import { requireBroker } from "./_broker_auth.js";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -157,6 +158,11 @@ export default async function handler(req, res) {
       });
     }
 
+    const adminKey = safe(req.headers["x-adbs-admin-key"]);
+    const isAdmin = !!process.env.ADBS_ADMIN_KEY && adminKey === process.env.ADBS_ADMIN_KEY;
+    const brokerEmail = isAdmin ? null : await requireBroker(req, supabase);
+    if (!isAdmin && !brokerEmail) return json(res, 401, { ok: false, error: "Sign-in required." });
+
     if (req.method === "GET") {
       const email = normalizeEmail(req.query?.email);
 
@@ -167,6 +173,7 @@ export default async function handler(req, res) {
         });
       }
 
+      if (!isAdmin && email !== brokerEmail) return json(res, 403, { ok: false, error: "Account access denied." });
       const account = await findAccountByEmail(email);
 
       if (!account) {
@@ -188,6 +195,8 @@ export default async function handler(req, res) {
     const newEmail = normalizeEmail(body.business_email || body.email);
     const contactName = safe(body.contact_name);
     const businessPhone = formatPhone(body.business_phone || body.phone);
+
+    if (!isAdmin && currentEmail !== brokerEmail) return json(res, 403, { ok: false, error: "Account access denied." });
 
     if (!currentEmail) {
       return json(res, 400, {
