@@ -219,7 +219,7 @@ export default function LiveSessions() {
     try {
       const res = await fetch("/api/manage_verify_link", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...brokerHeaders() },
         body: JSON.stringify({ action: "lookup", token: q })
       });
       const data = await safeJson(res);
