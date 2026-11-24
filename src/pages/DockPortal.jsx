@@ -74,13 +74,14 @@ export default function DockPortal() {
 
   return <main style={style}>
     <div style={{ maxWidth: 1050, margin: "0 auto" }}>
-      <header style={{ borderBottom: "1px solid #486782", paddingBottom: 20, marginBottom: 32 }}>
+      <div role="banner" style={{ position: "static", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: 10, borderBottom: "1px solid #486782", padding: "12px 0 24px", marginBottom: 32, width: "100%", boxSizing: "border-box" }}>
+        <img src="/qc-logo.png" alt="QueCab AdbS" style={{ display: "block", width: 120, maxWidth: "40%", height: "auto", objectFit: "contain" }} />
         <div style={{ fontSize: 14, letterSpacing: 3, color: "#91caff", fontWeight: 800 }}>SECURE FACILITY ACCESS</div>
-        <h1 style={{ fontSize: "clamp(28px,4vw,44px)", marginBottom: 8 }}>QueCab AdbS™ — Dock Portal</h1>
-        <p style={{ color: "#c3d4e5" }}>The Broker's Eyes at the Dock™</p>
-      </header>
+        <h1 style={{ fontSize: "clamp(28px,4vw,44px)", margin: 0, lineHeight: 1.2, overflowWrap: "anywhere" }}>QueCab AdbS™ — Dock Portal</h1>
+        <p style={{ color: "#c3d4e5", margin: 0 }}>The Broker's Eyes at the Dock™</p>
+      </div>
       {!ready ? <p>Loading secure sign-in…</p> : !session ?
-        <section style={{ maxWidth: 500, padding: "28px", border: "1px solid #55758f", borderRadius: 16, background: "#172b3e", boxShadow: "0 14px 35px #080e1699" }}>
+        <section style={{ maxWidth: 500, margin: "0 auto", boxSizing: "border-box", padding: "28px", border: "1px solid #55758f", borderRadius: 16, background: "#172b3e", boxShadow: "0 14px 35px #080e1699" }}>
           <h2 style={{ marginTop: 0 }}>{recoveryMode ? "Set or Reset Your Password" : "Facility Sign In"}</h2>
           <p style={{ color: "#c3d4e5" }}>{recoveryMode ? "Enter your facility email to receive a secure password recovery link." : "Authorized facility personnel only. Use your assigned email and password."}</p>
           <form onSubmit={recoveryMode ? sendRecovery : signIn}>
