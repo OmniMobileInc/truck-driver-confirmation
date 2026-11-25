@@ -26,7 +26,7 @@ function formatPhone(v) {
 }
 
 function bestPhone(link) {
-  return formatPhone(link?.driver_phone) || formatPhone(link?.dispatch_phone) || "";
+  return formatPhone(link?.driver_phone) || "";
 }
 
 function carrierPayload(link, token, verifiedAt = "") {
@@ -105,6 +105,7 @@ async function sendAlertEmail(link, token, failedAttempts) {
 }
 
 export default async function handler(req, res) {
+  res.setHeader("Cache-Control", "no-store");
   if (req.method === "GET") {
     try {
       const token = cleanText(req.query?.token);
@@ -121,8 +122,7 @@ export default async function handler(req, res) {
 
       if (error) {
         return res.status(500).json({
-          error: "Lookup failed",
-          detail: error.message || String(error)
+          error: "Lookup failed"
         });
       }
 
@@ -136,8 +136,7 @@ export default async function handler(req, res) {
       });
     } catch (err) {
       return res.status(500).json({
-        error: "Failed to load verification info",
-        detail: err?.message || String(err)
+        error: "Failed to load verification info"
       });
     }
   }
@@ -150,7 +149,10 @@ export default async function handler(req, res) {
     const token = cleanText(req.body?.token);
     const enteredDOT = onlyDigits(req.body?.entered_usdot);
     const enteredPlate = upper(req.body?.entered_plate);
-    const driverAnswered = !!req.body?.driver_answered;
+    if (typeof req.body?.driver_answered !== "boolean") {
+      return res.status(400).json({ error: "Driver answer must be explicitly confirmed." });
+    }
+    const driverAnswered = req.body.driver_answered;
 
     if (!token) {
       return res.status(400).json({ error: "Missing token" });
@@ -164,8 +166,7 @@ export default async function handler(req, res) {
 
     if (error) {
       return res.status(500).json({
-        error: "Lookup failed",
-        detail: error.message || String(error)
+        error: "Lookup failed"
       });
     }
 
@@ -224,13 +225,12 @@ export default async function handler(req, res) {
         failedAttempts: fails,
         alertTriggered,
         alertSent,
-        alertError
+        alertError: alertError ? "Alert delivery failed" : null
       }
     });
   } catch (err) {
     return res.status(500).json({
-      error: "verify failed",
-      detail: err?.message || String(err)
+      error: "Verification unavailable. Do not release the load."
     });
   }
 }
