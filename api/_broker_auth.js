@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { timingSafeEqual } from "node:crypto";
 
 export async function requireBroker(req, supabase) {
   const email = String(req.headers["x-adbs-broker-email"] || "").trim().toLowerCase();
@@ -6,16 +6,20 @@ export async function requireBroker(req, supabase) {
   if (!email || !code) return null;
   const { data, error } = await supabase.from("broker_accounts")
     .select("business_email,access_code,role,status,account_type,subscription_status")
-    .ilike("business_email", email).limit(1);
+    .eq("business_email", email).limit(1);
   if (error) throw new Error("Broker authorization unavailable");
   const account = data?.[0];
-  if (!account || String(account.access_code || "").trim().toUpperCase() !== code) return null;
+  if (!account) return null;
+  const expected = Buffer.from(String(account.access_code || "").trim().toUpperCase());
+  const supplied = Buffer.from(code);
+  if (!expected.length || expected.length !== supplied.length || !timingSafeEqual(expected, supplied)) return null;
   const role = String(account.role || "broker").toLowerCase();
   if (!["broker","shipper"].includes(role)) return null;
   const type = String(account.account_type || "").toLowerCase();
   const sub = String(account.subscription_status || "").toLowerCase();
   const status = String(account.status || "active").toLowerCase();
+  if (status !== "active") return null;
   if (type !== "internal" && sub !== "internal" &&
-    (status !== "active" || !["beta_active","trial_active","paid_active"].includes(sub))) return null;
+    !["beta_active","trial_active","paid_active"].includes(sub)) return null;
   return String(account.business_email).trim().toLowerCase();
 }
