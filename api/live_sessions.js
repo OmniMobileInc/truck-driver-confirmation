@@ -38,7 +38,7 @@ export default async function handler(req, res) {
     let query = supabase
       .from("verify_links")
       .select("*")
-      .ilike("issued_by_email", brokerEmail)
+      .eq("issued_by_email", brokerEmail)
       .order("created_at", { ascending: false })
       .limit(limit);
 
