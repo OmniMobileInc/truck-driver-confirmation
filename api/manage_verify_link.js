@@ -102,7 +102,7 @@ async function fetchLinkByToken(token, brokerEmail) {
     .from("verify_links")
     .select("*")
     .eq("token", token)
-    .ilike("issued_by_email", brokerEmail)
+    .eq("issued_by_email", brokerEmail)
     .maybeSingle();
 
   if (error) throw new Error(error.message || "Token lookup failed.");
@@ -113,7 +113,7 @@ async function fetchManyByField(field, value, brokerEmail, mode = "eq") {
   let query = supabase
     .from("verify_links")
     .select("*")
-    .ilike("issued_by_email", brokerEmail)
+    .eq("issued_by_email", brokerEmail)
     .order("created_at", { ascending: false })
     .limit(25);
 
@@ -280,7 +280,7 @@ export default async function handler(req, res) {
         .update({ status })
         .eq("token", token)
         .eq("status", current)
-        .ilike("issued_by_email", brokerEmail)
+        .eq("issued_by_email", brokerEmail)
         .select("*")
         .maybeSingle();
 
