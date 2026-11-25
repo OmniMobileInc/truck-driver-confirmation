@@ -163,8 +163,6 @@ function buildEmailHtml({
   loadId,
   verifyUrl,
   driverPhone,
-  usdot,
-  plate,
   expiresAt
 }) {
   const cleanPhone = formatPhone(driverPhone);
@@ -254,8 +252,6 @@ async function sendDockEmail({
   loadId,
   verifyUrl,
   driverPhone,
-  usdot,
-  plate,
   expiresAt
 }) {
   const from = process.env.ADBS_EMAIL_FROM;
@@ -290,17 +286,14 @@ async function sendDockEmail({
         loadId,
         verifyUrl,
         driverPhone,
-        usdot,
-        plate,
         expiresAt
       })
     });
 
-    return {
-      ok: true,
-      resend_id: result?.data?.id || "",
-      raw: result
-    };
+    if (result?.error || !result?.data?.id) {
+      return { ok: false, error: "Email delivery request failed" };
+    }
+    return { ok: true, resend_id: result.data.id };
   } catch (err) {
     return {
       ok: false,
@@ -373,7 +366,7 @@ export default async function handler(req, res) {
       });
     }
 
-    if (digits(driver_phone).length !== 10) {
+    if (digits(body.driver_phone).length !== 10) {
       return json(res, 400, {
         ok: false,
         error: "Driver phone is required"
@@ -415,7 +408,7 @@ export default async function handler(req, res) {
     if (error) {
       return json(res, 500, {
         ok: false,
-        error: error.message || "Could not create verification"
+        error: "Could not create verification"
       });
     }
 
@@ -429,8 +422,6 @@ export default async function handler(req, res) {
         loadId: load_id,
         verifyUrl: verify_url,
         driverPhone: driver_phone,
-        usdot: usdot_on_record,
-        plate: plate_on_record,
         expiresAt: expires_at
       });
 
@@ -465,7 +456,7 @@ export default async function handler(req, res) {
   } catch (err) {
     return json(res, 500, {
       ok: false,
-      error: err?.message || "Server error"
+      error: "Server error"
     });
   }
 }
