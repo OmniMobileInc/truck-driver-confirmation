@@ -128,7 +128,7 @@ export default function LiveSessions() {
       setErrorMsg("");
 
       try {
-        const res = await fetch("/api/live_sessions?status=active&limit=50", { headers: brokerHeaders() });
+        const res = await fetch("/api/live_sessions?status=all&limit=50", { headers: brokerHeaders() });
         const data = await res.json();
 
         if (!res.ok || !data?.ok) {
@@ -406,7 +406,7 @@ export default function LiveSessions() {
         </div>
 
         {record ? (
-          <div style={{ ...card, marginBottom: 16 }}>
+          <div id="verification-detail" style={{ ...card, marginBottom: 16 }}>
             <div style={sectionTitle}>Lookup Result</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16 }}>
               <div style={{ lineHeight: 1.7, fontSize: 15 }}>
@@ -450,7 +450,7 @@ export default function LiveSessions() {
         ) : null}
 
         <div style={{ ...card, marginBottom: 16 }}>
-          <div style={sectionTitle}>Active Verifications</div>
+          <div style={sectionTitle}>Recent Verifications</div>
 
           <div
             style={{
@@ -473,7 +473,7 @@ export default function LiveSessions() {
           </div>
 
           <div style={{ opacity: 0.78, fontSize: 14, marginBottom: 12 }}>
-            Use the lookup above for any verification, or copy a value below when needed.
+            Select a load to review its verification history and details.
           </div>
 
           {errorMsg ? (
@@ -493,7 +493,7 @@ export default function LiveSessions() {
           ) : null}
 
           {!loading && rows.length === 0 ? (
-            <div style={{ opacity: 0.8 }}>No active verifications right now.</div>
+            <div style={{ opacity: 0.8 }}>No verifications right now.</div>
           ) : null}
 
           {rows.length > 0 ? (
@@ -567,53 +567,7 @@ export default function LiveSessions() {
                         marginTop: 12
                       }}
                     >
-                      <button
-                        type="button"
-                        style={copyBtn}
-                        onClick={() => copyText(verificationId, setStatusMsg)}
-                      >
-                        Copy ID
-                      </button>
-
-                      <button
-                        type="button"
-                        style={copyBtn}
-                        onClick={() => copyText(row.load_id, setStatusMsg)}
-                      >
-                        Copy Load ID
-                      </button>
-
-                      <button
-                        type="button"
-                        style={copyBtn}
-                        onClick={() => copyText(row.usdot_on_record, setStatusMsg)}
-                      >
-                        Copy DOT
-                      </button>
-
-                      <button
-                        type="button"
-                        style={copyBtn}
-                        onClick={() => copyText(row.plate_on_record, setStatusMsg)}
-                      >
-                        Copy Plate
-                      </button>
-
-                      <button
-                        type="button"
-                        style={copyBtn}
-                        onClick={() => copyText(row.driver_phone, setStatusMsg)}
-                      >
-                        Copy Driver Phone
-                      </button>
-
-                      <button
-                        type="button"
-                        style={copyBtn}
-                        onClick={() => copyText(row.verify_url, setStatusMsg)}
-                      >
-                        Copy Verify Link
-                      </button>
+                      <button type="button" style={copyBtn} onClick={async () => { await loadDetailByToken(verificationId); document.getElementById("verification-detail")?.scrollIntoView({ behavior: "smooth" }); }}>View Load Details &amp; Activity</button>
                     </div>
                   </div>
                 );
