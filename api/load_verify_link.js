@@ -21,11 +21,11 @@ export default async function handler(req, res) {
 
   const { data, error } = await supabase
     .from("verify_links")
-    .select("token, load_id, usdot_on_record, plate_on_record, driver_phone, status, starts_at, expires_at")
+    .select("token, load_id, driver_phone, status, starts_at, expires_at")
     .eq("token", token)
     .maybeSingle();
 
-  if (error) return json(res, 500, { error: error.message });
+  if (error) return json(res, 500, { error: "Lookup unavailable" });
   if (!data) return json(res, 404, { error: "Not found" });
 
   return json(res, 200, { ok: true, link: data });
