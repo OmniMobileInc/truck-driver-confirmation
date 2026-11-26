@@ -82,7 +82,7 @@ function compactRow(req, link, attempts = []) {
     verification_id: link.token,
     verify_url: buildVerifyUrl(req, link.token),
     load_id: safeStr(link.load_id),
-    status: safeStr(link.status || "active"),
+    status: effectiveStatus(link),
     result_summary: summarizeResult(attempts, link.status),
     attempts_count: Array.isArray(attempts) ? attempts.length : 0,
     dock_email: safeStr(link.dock_email),
@@ -172,6 +172,14 @@ async function broadLookupMany(raw, brokerEmail) {
   return [];
 }
 
+function effectiveStatus(row) {
+  const status = String(row.status || "active").toLowerCase();
+  if (status !== "active") return status;
+  if (row.expires_at && Date.parse(row.expires_at) <= Date.now()) return "expired";
+  if (row.starts_at && Date.parse(row.starts_at) > Date.now()) return "pending";
+  return status;
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return json(res, 405, { ok: false, error: "Method not allowed" });
@@ -228,7 +236,7 @@ export default async function handler(req, res) {
         ok: true,
         token: link.token,
         verify_url: buildVerifyUrl(req, link.token),
-        status: link.status || "active",
+        status: effectiveStatus(link),
         expires_at: link.expires_at || null,
         load_id: link.load_id || "",
         dock_email: link.dock_email || "",
@@ -288,10 +296,11 @@ export default async function handler(req, res) {
         return json(res, 500, { ok: false, error: error.message || "Could not update status." });
       }
 
+      if (!data) return json(res, 409, { ok: false, error: "Verification changed. Refresh and try again." });
       return json(res, 200, {
         ok: true,
         token,
-        status: data?.status || status
+        status: data.status
       });
     }
 
