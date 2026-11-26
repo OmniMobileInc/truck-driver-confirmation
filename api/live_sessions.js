@@ -24,6 +24,14 @@ function buildVerifyUrl(req, token) {
   return `${origin}/v.html?t=${token}&cv=4`;
 }
 
+function effectiveStatus(row) {
+  const status = String(row.status || "active").toLowerCase();
+  if (status !== "active") return status;
+  if (row.expires_at && Date.parse(row.expires_at) <= Date.now()) return "expired";
+  if (row.starts_at && Date.parse(row.starts_at) > Date.now()) return "pending";
+  return status;
+}
+
 export default async function handler(req, res) {
   if (req.method !== "GET") {
     return json(res, 405, { ok: false, error: "Method not allowed" });
@@ -33,7 +41,7 @@ export default async function handler(req, res) {
     const brokerEmail = await requireBroker(req, supabase);
     if (!brokerEmail) return json(res, 401, { ok: false, error: "Broker sign-in required." });
     const status = safeStr(req.query?.status || "active").toLowerCase();
-    const limit = Math.max(1, Math.min(100, Number(req.query?.limit || 50)));
+    const limit = Math.max(1, Math.min(100, Math.floor(Number(req.query?.limit) || 50)));
 
     let query = supabase
       .from("verify_links")
@@ -63,7 +71,7 @@ export default async function handler(req, res) {
       verification_id: row.token || "",
       verify_url: buildVerifyUrl(req, row.token || ""),
       load_id: row.load_id || "",
-      status: row.status || "active",
+      status: effectiveStatus(row),
       created_at: row.created_at || "",
       expires_at: row.expires_at || null,
       dock_email: row.dock_email || "",
