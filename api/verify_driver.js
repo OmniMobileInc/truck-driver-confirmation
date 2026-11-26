@@ -193,6 +193,9 @@ export default async function handler(req, res) {
 
     const state = String(attempt?.state || "").toLowerCase();
     if (state === "not_found") return res.status(404).json({ error: "Verification link not found" });
+    if (state === "expired") return res.status(410).json({ error: "Verification expired. Do not release the load." });
+    if (state === "pending") return res.status(409).json({ error: "Verification window has not opened." });
+    if (state === "unavailable") return res.status(409).json({ error: "Verification unavailable. Do not release the load." });
     if (state === "revoked") return res.status(410).json({ error: "Verification link revoked" });
     if (state === "locked" && !attempt?.result) {
       return res.status(423).json({ error: "Verification locked after three failed attempts.", locked: true });
