@@ -1,3 +1,4 @@
+import { getAssignedDockLink, getDockUser } from "./_dock_auth.js";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -26,7 +27,7 @@ function formatPhone(v) {
 }
 
 function bestPhone(link) {
-  return formatPhone(link?.driver_phone) || formatPhone(link?.dispatch_phone) || "";
+  return formatPhone(link?.driver_phone) || "";
 }
 
 function carrierPayload(link, token, verifiedAt = "") {
@@ -38,11 +39,6 @@ function carrierPayload(link, token, verifiedAt = "") {
     carrier_contact_name: cleanText(link?.dispatch_contact) || "",
     carrier_contact_phone: formatPhone(link?.dispatch_phone || "")
   };
-}
-
-function isSuccessfulClosedStatus(status) {
-  const normalized = String(status || "").trim().toLowerCase();
-  return normalized === "cleared" || normalized === "completed";
 }
 
 async function sendAlertEmail(link, token, failedAttempts) {
@@ -73,21 +69,17 @@ async function sendAlertEmail(link, token, failedAttempts) {
       from: fromEmail,
       to: [toEmail],
       subject: `AdbS ALERT — 3 Failed Verification Attempts [${token}]`,
-      html: `
-        <div style="font-family:Arial,Helvetica,sans-serif;line-height:1.5;color:#111;">
-          <h2>AdbS Alert</h2>
-          <p>Three failed Truck-Driver verification attempts were detected.</p>
-          <p><strong>Load ID:</strong> ${loadId}</p>
-          <p><strong>Verification ID:</strong> ${token}</p>
-          <p><strong>Failed Attempts:</strong> ${failedAttempts}</p>
-          <hr style="margin:18px 0; border:none; border-top:1px solid #ddd;" />
-          <p><strong>Carrier Company:</strong> ${carrierCompany}</p>
-          <p><strong>Carrier Contact:</strong> ${carrierContact}</p>
-          <p><strong>Carrier Contact Phone:</strong> ${carrierPhone}</p>
-          <hr style="margin:18px 0; border:none; border-top:1px solid #ddd;" />
-          <p>Open Control Center and search this Verification ID:</p>
-          <p style="font-size:18px; font-weight:800;">${token}</p>
-        </div>
+      text: `
+Three failed Truck-Driver verification attempts were detected.
+
+Load ID: ${loadId}
+Verification ID: ${token}
+Failed attempts: ${failedAttempts}
+Carrier: ${carrierCompany}
+Carrier contact: ${carrierContact}
+Carrier phone: ${carrierPhone}
+
+Open Control Center and search for the verification ID above.
       `
     });
 
@@ -105,43 +97,7 @@ async function sendAlertEmail(link, token, failedAttempts) {
 }
 
 export default async function handler(req, res) {
-  if (req.method === "GET") {
-    try {
-      const token = cleanText(req.query?.token);
-
-      if (!token) {
-        return res.status(400).json({ error: "Missing token" });
-      }
-
-      const { data: link, error } = await supabase
-        .from("verify_links")
-        .select("token,driver_phone,dispatch_phone,carrier_company,dispatch_contact")
-        .eq("token", token)
-        .maybeSingle();
-
-      if (error) {
-        return res.status(500).json({
-          error: "Lookup failed",
-          detail: error.message || String(error)
-        });
-      }
-
-      if (!link) {
-        return res.status(404).json({ error: "Verification link not found" });
-      }
-
-      return res.status(200).json({
-        ok: true,
-        ...carrierPayload(link, token, "")
-      });
-    } catch (err) {
-      return res.status(500).json({
-        error: "Failed to load verification info",
-        detail: err?.message || String(err)
-      });
-    }
-  }
-
+  res.setHeader("Cache-Control", "no-store");
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
@@ -150,28 +106,21 @@ export default async function handler(req, res) {
     const token = cleanText(req.body?.token);
     const enteredDOT = onlyDigits(req.body?.entered_usdot);
     const enteredPlate = upper(req.body?.entered_plate);
-    const driverAnswered = !!req.body?.driver_answered;
-
-    if (!token) {
-      return res.status(400).json({ error: "Missing token" });
+    if (typeof req.body?.driver_answered !== "boolean") {
+      return res.status(400).json({ error: "Driver answer must be explicitly confirmed." });
     }
+    const driverAnswered = req.body.driver_answered;
 
-    const { data: link, error } = await supabase
-      .from("verify_links")
-      .select("*")
-      .eq("token", token)
-      .maybeSingle();
-
-    if (error) {
-      return res.status(500).json({
-        error: "Lookup failed",
-        detail: error.message || String(error)
-      });
+    if (!token || !enteredDOT || !enteredPlate || enteredDOT.length > 12 || enteredPlate.length > 32) {
+      return res.status(400).json({ error: "Enter the USDOT number and plate as displayed on the truck." });
     }
-
-    if (!link) {
-      return res.status(404).json({ error: "Verification link not found" });
+    const user = await getDockUser(req, supabase);
+    if (!user) return res.status(401).json({ error: "Sign in to the Dock Portal." });
+    if (req.body?.dock_certified !== true) {
+      return res.status(400).json({ error: "Certify your dock observations before submitting." });
     }
+    const link = await getAssignedDockLink(supabase, token, user);
+    if (!link) return res.status(404).json({ error: "Verification not assigned to your facility." });
 
     // All attempt checks, inserts and status changes happen under a single
     // database row lock. The browser cannot bypass the three-strike limit.
@@ -181,7 +130,9 @@ export default async function handler(req, res) {
         p_token: token,
         p_entered_usdot: enteredDOT,
         p_entered_plate: enteredPlate,
-        p_driver_answered: driverAnswered
+        p_driver_answered: driverAnswered,
+        p_dock_user_id: user.id,
+        p_dock_certified: true
       }
     );
 
@@ -191,7 +142,13 @@ export default async function handler(req, res) {
     }
 
     const state = String(attempt?.state || "").toLowerCase();
+    if (state === "forbidden") return res.status(404).json({ error: "Verification not assigned to your facility." });
+    if (state === "uncertified") return res.status(400).json({ error: "Dock certification required." });
+    if (state === "unacknowledged") return res.status(409).json({ error: "Broker acknowledgment required. Ask the broker to issue a new verification." });
     if (state === "not_found") return res.status(404).json({ error: "Verification link not found" });
+    if (state === "expired") return res.status(410).json({ error: "Verification expired. Do not release the load." });
+    if (state === "pending") return res.status(409).json({ error: "Verification window has not opened." });
+    if (state === "unavailable") return res.status(409).json({ error: "Verification unavailable. Do not release the load." });
     if (state === "revoked") return res.status(410).json({ error: "Verification link revoked" });
     if (state === "locked" && !attempt?.result) {
       return res.status(423).json({ error: "Verification locked after three failed attempts.", locked: true });
@@ -224,13 +181,12 @@ export default async function handler(req, res) {
         failedAttempts: fails,
         alertTriggered,
         alertSent,
-        alertError
+        alertError: alertError ? "Alert delivery failed" : null
       }
     });
   } catch (err) {
     return res.status(500).json({
-      error: "verify failed",
-      detail: err?.message || String(err)
+      error: "Verification unavailable. Do not release the load."
     });
   }
 }

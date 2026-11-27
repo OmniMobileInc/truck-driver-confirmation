@@ -1,3 +1,5 @@
+import { verificationUrl } from "./_app_origin.js";
+import { requireBroker } from "./_broker_auth.js";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -15,12 +17,13 @@ function safeStr(v) {
   return String(v ?? "").trim();
 }
 
-function buildVerifyUrl(req, token) {
-  const origin =
-    (req.headers["x-forwarded-proto"] ? `${req.headers["x-forwarded-proto"]}://` : "https://") +
-    (req.headers["x-forwarded-host"] || req.headers.host || "localhost");
 
-  return `${origin}/v.html?t=${token}&cv=4`;
+function effectiveStatus(row) {
+  const status = String(row.status || "active").toLowerCase();
+  if (status !== "active") return status;
+  if (row.expires_at && Date.parse(row.expires_at) <= Date.now()) return "expired";
+  if (row.starts_at && Date.parse(row.starts_at) > Date.now()) return "pending";
+  return status;
 }
 
 export default async function handler(req, res) {
@@ -29,12 +32,15 @@ export default async function handler(req, res) {
   }
 
   try {
+    const brokerEmail = await requireBroker(req, supabase);
+    if (!brokerEmail) return json(res, 401, { ok: false, error: "Broker sign-in required." });
     const status = safeStr(req.query?.status || "active").toLowerCase();
-    const limit = Math.max(1, Math.min(100, Number(req.query?.limit || 50)));
+    const limit = Math.max(1, Math.min(100, Math.floor(Number(req.query?.limit) || 50)));
 
     let query = supabase
       .from("verify_links")
       .select("*")
+      .eq("issued_by_email", brokerEmail)
       .order("created_at", { ascending: false })
       .limit(limit);
 
@@ -57,9 +63,9 @@ export default async function handler(req, res) {
     const rows = (Array.isArray(data) ? data : []).map((row) => ({
       token: row.token || "",
       verification_id: row.token || "",
-      verify_url: buildVerifyUrl(req, row.token || ""),
+      verify_url: verificationUrl(row.token || ""),
       load_id: row.load_id || "",
-      status: row.status || "active",
+      status: effectiveStatus(row),
       created_at: row.created_at || "",
       expires_at: row.expires_at || null,
       dock_email: row.dock_email || "",

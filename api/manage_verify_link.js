@@ -1,3 +1,5 @@
+import { verificationUrl } from "./_app_origin.js";
+import { requireBroker } from "./_broker_auth.js";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -48,13 +50,6 @@ function tokenFromAny(raw) {
   return s;
 }
 
-function buildVerifyUrl(req, token) {
-  const origin =
-    (req.headers["x-forwarded-proto"] ? `${req.headers["x-forwarded-proto"]}://` : "https://") +
-    (req.headers["x-forwarded-host"] || req.headers.host || "localhost");
-
-  return `${origin}/v.html?t=${token}&cv=4`;
-}
 
 async function fetchAttemptsForToken(token) {
   const { data, error } = await supabase
@@ -75,13 +70,13 @@ function summarizeResult(attempts, status) {
   return safeStr(status || "active");
 }
 
-function compactRow(req, link, attempts = []) {
+function compactRow(link, attempts = []) {
   return {
     token: link.token,
     verification_id: link.token,
-    verify_url: buildVerifyUrl(req, link.token),
+    verify_url: verificationUrl(link.token),
     load_id: safeStr(link.load_id),
-    status: safeStr(link.status || "active"),
+    status: effectiveStatus(link),
     result_summary: summarizeResult(attempts, link.status),
     attempts_count: Array.isArray(attempts) ? attempts.length : 0,
     dock_email: safeStr(link.dock_email),
@@ -96,21 +91,23 @@ function compactRow(req, link, attempts = []) {
   };
 }
 
-async function fetchLinkByToken(token) {
+async function fetchLinkByToken(token, brokerEmail) {
   const { data, error } = await supabase
     .from("verify_links")
     .select("*")
     .eq("token", token)
+    .eq("issued_by_email", brokerEmail)
     .maybeSingle();
 
   if (error) throw new Error(error.message || "Token lookup failed.");
   return data || null;
 }
 
-async function fetchManyByField(field, value, mode = "eq") {
+async function fetchManyByField(field, value, brokerEmail, mode = "eq") {
   let query = supabase
     .from("verify_links")
     .select("*")
+    .eq("issued_by_email", brokerEmail)
     .order("created_at", { ascending: false })
     .limit(25);
 
@@ -125,48 +122,56 @@ async function fetchManyByField(field, value, mode = "eq") {
   return Array.isArray(data) ? data : [];
 }
 
-async function broadLookupMany(raw) {
+async function broadLookupMany(raw, brokerEmail) {
   const q = safeStr(raw);
   if (!q) return [];
 
   const directToken = tokenFromAny(q);
 
   {
-    const link = await fetchLinkByToken(directToken);
+    const link = await fetchLinkByToken(directToken, brokerEmail);
     if (link) return [link];
   }
 
   {
-    const rows = await fetchManyByField("load_id", q, "eq");
+    const rows = await fetchManyByField("load_id", q, brokerEmail, "eq");
     if (rows.length) return rows;
   }
 
   if (q.includes("@")) {
-    const rows = await fetchManyByField("dock_email", q.toLowerCase(), "eq");
+    const rows = await fetchManyByField("dock_email", q.toLowerCase(), brokerEmail, "eq");
     if (rows.length) return rows;
   }
 
   if (onlyDigits(q).length >= 7) {
-    const rows = await fetchManyByField("driver_phone", formatPhoneHyphen(q), "eq");
+    const rows = await fetchManyByField("driver_phone", formatPhoneHyphen(q), brokerEmail, "eq");
     if (rows.length) return rows;
   }
 
   if (onlyDigits(q).length >= 4) {
-    const rows = await fetchManyByField("usdot_on_record", onlyDigits(q), "eq");
+    const rows = await fetchManyByField("usdot_on_record", onlyDigits(q), brokerEmail, "eq");
     if (rows.length) return rows;
   }
 
   {
-    const rows = await fetchManyByField("plate_on_record", q.toUpperCase(), "eq");
+    const rows = await fetchManyByField("plate_on_record", q.toUpperCase(), brokerEmail, "eq");
     if (rows.length) return rows;
   }
 
   {
-    const rows = await fetchManyByField("carrier_company", `%${q}%`, "ilike");
+    const rows = await fetchManyByField("carrier_company", `%${q}%`, brokerEmail, "ilike");
     if (rows.length) return rows;
   }
 
   return [];
+}
+
+function effectiveStatus(row) {
+  const status = String(row.status || "active").toLowerCase();
+  if (status !== "active") return status;
+  if (row.expires_at && Date.parse(row.expires_at) <= Date.now()) return "expired";
+  if (row.starts_at && Date.parse(row.starts_at) > Date.now()) return "pending";
+  return status;
 }
 
 export default async function handler(req, res) {
@@ -176,6 +181,8 @@ export default async function handler(req, res) {
 
   try {
     const body = typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {});
+    const brokerEmail = await requireBroker(req, supabase);
+    if (!brokerEmail) return json(res, 401, { ok: false, error: "Broker sign-in required." });
     const action = safeStr(body.action).toLowerCase();
 
     if (action === "lookup") {
@@ -187,7 +194,7 @@ export default async function handler(req, res) {
         });
       }
 
-      const rows = await broadLookupMany(raw);
+      const rows = await broadLookupMany(raw, brokerEmail);
 
       if (!rows.length) {
         return json(res, 404, { ok: false, error: "Verification not found." });
@@ -196,7 +203,7 @@ export default async function handler(req, res) {
       const compactRows = [];
       for (const row of rows) {
         const attempts = await fetchAttemptsForToken(row.token);
-        compactRows.push(compactRow(req, row, attempts));
+        compactRows.push(compactRow(row, attempts));
       }
 
       return json(res, 200, {
@@ -212,7 +219,7 @@ export default async function handler(req, res) {
         return json(res, 400, { ok: false, error: "Missing token." });
       }
 
-      const link = await fetchLinkByToken(token);
+      const link = await fetchLinkByToken(token, brokerEmail);
       if (!link) {
         return json(res, 404, { ok: false, error: "Verification not found." });
       }
@@ -222,8 +229,8 @@ export default async function handler(req, res) {
       return json(res, 200, {
         ok: true,
         token: link.token,
-        verify_url: buildVerifyUrl(req, link.token),
-        status: link.status || "active",
+        verify_url: verificationUrl(link.token),
+        status: effectiveStatus(link),
         expires_at: link.expires_at || null,
         load_id: link.load_id || "",
         dock_email: link.dock_email || "",
@@ -234,6 +241,7 @@ export default async function handler(req, res) {
         carrier_contact_name: link.dispatch_contact || "",
         carrier_contact_phone: link.dispatch_phone || "",
         created_at: link.created_at || "",
+        broker_acknowledged_at: link.broker_acknowledged_at || null,
         attempts
       });
     }
@@ -246,14 +254,39 @@ export default async function handler(req, res) {
         return json(res, 400, { ok: false, error: "Missing token or status." });
       }
 
-      if (!["active", "revoked", "locked", "cleared"].includes(status)) {
-        return json(res, 400, { ok: false, error: "Invalid status." });
+      // Brokers may revoke an active link or reactivate a revoked, never-attempted link.
+      // Verification outcomes are exclusively set by the server-side verification process.
+      if (!["active", "revoked"].includes(status)) {
+        return json(res, 403, { ok: false, error: "Verification results cannot be manually assigned." });
       }
 
+      const owned = await fetchLinkByToken(token, brokerEmail);
+      if (!owned) return json(res, 404, { ok: false, error: "Verification not found." });
+      const current = String(owned.status || "").toLowerCase();
+      if (status === "revoked" && current !== "active") {
+        return json(res, 409, { ok: false, error: "Only active verifications may be revoked." });
+      }
+      if (status === "active") {
+        if (current !== "revoked") {
+          return json(res, 409, { ok: false, error: "Only revoked verifications may be reactivated." });
+        }
+        if (!owned.broker_acknowledged_at || !owned.facility_id) {
+          return json(res, 409, { ok: false, error: "Issue a new verification with a facility and broker acknowledgment." });
+        }
+        const attempts = await fetchAttemptsForToken(token);
+        if (attempts.length) {
+          return json(res, 409, { ok: false, error: "A verification with recorded attempts cannot be reactivated." });
+        }
+        if (owned.expires_at && new Date(owned.expires_at).getTime() <= Date.now()) {
+          return json(res, 409, { ok: false, error: "Expired verifications cannot be reactivated." });
+        }
+      }
       const { data, error } = await supabase
         .from("verify_links")
         .update({ status })
         .eq("token", token)
+        .eq("status", current)
+        .eq("issued_by_email", brokerEmail)
         .select("*")
         .maybeSingle();
 
@@ -261,10 +294,11 @@ export default async function handler(req, res) {
         return json(res, 500, { ok: false, error: error.message || "Could not update status." });
       }
 
+      if (!data) return json(res, 409, { ok: false, error: "Verification changed. Refresh and try again." });
       return json(res, 200, {
         ok: true,
         token,
-        status: data?.status || status
+        status: data.status
       });
     }
 

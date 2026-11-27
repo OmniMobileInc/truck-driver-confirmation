@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
-import { getAuthEmail } from "../utils/auth.js";
+import { getAuthCode, getAuthEmail } from "../utils/auth.js";
 
 function clean(v) {
   return String(v || "").trim().toLowerCase();
@@ -26,37 +26,11 @@ export default function RequireActiveSubscription({ children }) {
 
       const res = await fetch("/api/check_subscription", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ email })
+        headers: { "x-adbs-broker-email": email, "x-adbs-broker-code": getAuthCode() }
       });
 
       const data = await res.json();
-
-      const accountType = clean(data?.account_type);
-      const subscriptionStatus = clean(data?.subscription_status);
-      const accountStatus = clean(data?.status);
-
-      const isActiveAccount =
-        accountStatus === "active" ||
-        accountStatus === "";
-
-      const isInternal =
-        accountType === "internal" ||
-        subscriptionStatus === "internal";
-
-      const isPaid =
-        subscriptionStatus === "paid_active" ||
-        subscriptionStatus === "active" ||
-        subscriptionStatus === "trialing";
-
-      if (res.ok && data?.ok && isActiveAccount && (isInternal || isPaid)) {
-        setAllowed(true);
-      } else {
-        console.log("Subscription gate blocked:", data);
-        setAllowed(false);
-      }
+      setAllowed(res.ok && data?.allowed === true);
     } catch (err) {
       console.log("Subscription gate error:", err);
       setAllowed(false);

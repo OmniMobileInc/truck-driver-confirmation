@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import Header from "../components/Header.jsx";
-import { getAuthEmail } from "../utils/auth.js";
+import { getAuthEmail, getAuthCode } from "../utils/auth.js";
 
 function clean(v) {
   return String(v || "").trim();
@@ -100,7 +100,8 @@ export default function Account() {
   async function loadUsage(accountEmail, limitValue, bonusValue) {
     try {
       const res = await fetch(
-        `/api/dashboard_totals?email=${encodeURIComponent(accountEmail)}`
+        `/api/dashboard_totals`,
+        { headers: { "x-adbs-broker-email": getAuthEmail(), "x-adbs-broker-code": getAuthCode() } }
       );
 
       const data = await res.json().catch(() => ({}));
@@ -135,7 +136,8 @@ export default function Account() {
 
     try {
       const res = await fetch(
-        `/api/account_update?email=${encodeURIComponent(accountEmail)}`
+        `/api/account_update?email=${encodeURIComponent(accountEmail)}`,
+        { headers: { "x-adbs-broker-email": getAuthEmail(), "x-adbs-broker-code": getAuthCode() } }
       );
 
       const data = await res.json().catch(() => ({}));
@@ -194,7 +196,7 @@ export default function Account() {
     try {
       const res = await fetch("/api/account_update", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-adbs-broker-email": getAuthEmail(), "x-adbs-broker-code": getAuthCode() },
         body: JSON.stringify({
           current_email: email,
           business_email: newEmail,
@@ -250,8 +252,7 @@ export default function Account() {
     try {
       const res = await fetch("/api/create_billing_portal_session", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email })
+        headers: { "x-adbs-broker-email": getAuthEmail(), "x-adbs-broker-code": getAuthCode() }
       });
 
       const data = await res.json().catch(() => ({}));

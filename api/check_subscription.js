@@ -1,3 +1,4 @@
+import { requireBroker } from "./_broker_auth.js";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -12,41 +13,15 @@ function json(res, code, obj) {
   res.end(JSON.stringify(obj));
 }
 
-function normalizeEmail(v) {
-  return String(v || "").trim().toLowerCase();
-}
-
 function normalizeStatus(v) {
   return String(v || "").trim().toLowerCase();
 }
 
 export default async function handler(req, res) {
   try {
-    let email = "";
-
-    if (req.method === "GET") {
-      email = normalizeEmail(req.query?.email);
-    } else if (req.method === "POST") {
-      const body =
-        typeof req.body === "string"
-          ? JSON.parse(req.body || "{}")
-          : req.body || {};
-
-      email = normalizeEmail(body.email);
-    } else {
-      return json(res, 405, {
-        ok: false,
-        error: "Method not allowed"
-      });
-    }
-
-    if (!email) {
-      return json(res, 400, {
-        ok: false,
-        error: "Missing email.",
-        hint: "Use /api/check_subscription?email=broker@email.com"
-      });
-    }
+    if (req.method !== "POST") return json(res, 405, { ok: false, error: "Method not allowed" });
+    const email = await requireBroker(req, supabase, { requireSubscription: false });
+    if (!email) return json(res, 401, { ok: false, error: "Broker sign-in required." });
 
     const { data, error } = await supabase
       .from("broker_accounts")
@@ -80,9 +55,7 @@ export default async function handler(req, res) {
       accountType === "internal" || subscriptionStatus === "internal";
 
     const isPaid =
-      subscriptionStatus === "paid_active" ||
-      subscriptionStatus === "active" ||
-      subscriptionStatus === "trialing";
+      ["paid_active", "active", "trialing", "beta_active", "trial_active"].includes(subscriptionStatus);
 
     const allowed = isActiveAccount && (isInternal || isPaid);
 

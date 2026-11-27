@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import Header from "../components/Header.jsx";
-import { LS_EMAIL, isBrokerOrShipper } from "../utils/auth.js";
+import { LS_EMAIL, getAuthCode, getAuthEmail, isBrokerOrShipper } from "../utils/auth.js";
 
 function fmtDate(v) {
   if (!v) return "(unknown)";
@@ -97,6 +97,7 @@ export default function LiveSessions() {
 
   const email = (localStorage.getItem(LS_EMAIL) || "").trim();
   const authorized = !!email && isBrokerOrShipper(email);
+  const brokerHeaders = () => ({ "x-adbs-broker-email": getAuthEmail(), "x-adbs-broker-code": getAuthCode() });
 
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -127,7 +128,7 @@ export default function LiveSessions() {
       setErrorMsg("");
 
       try {
-        const res = await fetch("/api/live_sessions?status=active&limit=50");
+        const res = await fetch("/api/live_sessions?status=all&limit=50", { headers: brokerHeaders() });
         const data = await res.json();
 
         if (!res.ok || !data?.ok) {
@@ -175,7 +176,7 @@ export default function LiveSessions() {
     try {
       const res = await fetch("/api/manage_verify_link", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...brokerHeaders() },
         body: JSON.stringify({ action: "detail", token })
       });
       const data = await safeJson(res);
@@ -218,7 +219,7 @@ export default function LiveSessions() {
     try {
       const res = await fetch("/api/manage_verify_link", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...brokerHeaders() },
         body: JSON.stringify({ action: "lookup", token: q })
       });
       const data = await safeJson(res);
@@ -405,7 +406,7 @@ export default function LiveSessions() {
         </div>
 
         {record ? (
-          <div style={{ ...card, marginBottom: 16 }}>
+          <div id="verification-detail" style={{ ...card, marginBottom: 16 }}>
             <div style={sectionTitle}>Lookup Result</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16 }}>
               <div style={{ lineHeight: 1.7, fontSize: 15 }}>
@@ -416,6 +417,7 @@ export default function LiveSessions() {
                 Expires: <b>{record.expires_at ? fmtDate(record.expires_at) : "No Expire"}</b><br />
                 Dock Email: <b>{fmt(record.dock_email)}</b><br />
                 Driver Phone: <b>{fmt(record.driver_phone)}</b><br />
+                Broker Acknowledgment: <b>{record.broker_acknowledged_at ? fmtDate(record.broker_acknowledged_at) : "Not recorded"}</b><br />
                 Assigned USDOT#: <b>{fmt(record.usdot_on_record)}</b><br />
                 Assigned Plate: <b>{fmt(record.plate_on_record)}</b><br />
                 Carrier Company: <b>{fmt(record.carrier_company)}</b><br />
@@ -434,6 +436,8 @@ export default function LiveSessions() {
                         <div style={{ fontWeight: 900, marginBottom: 6 }}>{shortResult(a.result)}</div>
                         <div style={{ fontSize: 14, lineHeight: 1.6 }}>
                           Time: <b>{fmtDate(pickTime(a))}</b><br />
+                          Dock Employee: <b>{fmt(a.dock_employee_email || a.dock_employee_id)}</b><br />
+                          Dock Certified: <b>{a.dock_certified_at ? fmtDate(a.dock_certified_at) : "Not recorded"}</b><br />
                           Entered DOT: <b>{fmt(a.entered_usdot)}</b><br />
                           Entered Plate: <b>{fmt(a.entered_plate)}</b><br />
                           Driver Answered: <b>{String(a.driver_answered)}</b><br />
@@ -449,7 +453,7 @@ export default function LiveSessions() {
         ) : null}
 
         <div style={{ ...card, marginBottom: 16 }}>
-          <div style={sectionTitle}>Active Verifications</div>
+          <div style={sectionTitle}>Recent Verifications</div>
 
           <div
             style={{
@@ -472,7 +476,7 @@ export default function LiveSessions() {
           </div>
 
           <div style={{ opacity: 0.78, fontSize: 14, marginBottom: 12 }}>
-            Use the lookup above for any verification, or copy a value below when needed.
+            Select a load to review its verification history and details.
           </div>
 
           {errorMsg ? (
@@ -492,7 +496,7 @@ export default function LiveSessions() {
           ) : null}
 
           {!loading && rows.length === 0 ? (
-            <div style={{ opacity: 0.8 }}>No active verifications right now.</div>
+            <div style={{ opacity: 0.8 }}>No verifications right now.</div>
           ) : null}
 
           {rows.length > 0 ? (
@@ -566,53 +570,7 @@ export default function LiveSessions() {
                         marginTop: 12
                       }}
                     >
-                      <button
-                        type="button"
-                        style={copyBtn}
-                        onClick={() => copyText(verificationId, setStatusMsg)}
-                      >
-                        Copy ID
-                      </button>
-
-                      <button
-                        type="button"
-                        style={copyBtn}
-                        onClick={() => copyText(row.load_id, setStatusMsg)}
-                      >
-                        Copy Load ID
-                      </button>
-
-                      <button
-                        type="button"
-                        style={copyBtn}
-                        onClick={() => copyText(row.usdot_on_record, setStatusMsg)}
-                      >
-                        Copy DOT
-                      </button>
-
-                      <button
-                        type="button"
-                        style={copyBtn}
-                        onClick={() => copyText(row.plate_on_record, setStatusMsg)}
-                      >
-                        Copy Plate
-                      </button>
-
-                      <button
-                        type="button"
-                        style={copyBtn}
-                        onClick={() => copyText(row.driver_phone, setStatusMsg)}
-                      >
-                        Copy Driver Phone
-                      </button>
-
-                      <button
-                        type="button"
-                        style={copyBtn}
-                        onClick={() => copyText(row.verify_url, setStatusMsg)}
-                      >
-                        Copy Verify Link
-                      </button>
+                      <button type="button" style={copyBtn} onClick={async () => { await loadDetailByToken(verificationId); document.getElementById("verification-detail")?.scrollIntoView({ behavior: "smooth" }); }}>View Load Details &amp; Activity</button>
                     </div>
                   </div>
                 );

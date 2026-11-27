@@ -1,3 +1,4 @@
+import { requireBroker } from "./_broker_auth.js";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -57,6 +58,9 @@ export default async function handler(req, res) {
   }
 
   try {
+    if (!await requireBroker(req, supabase)) {
+      return json(res, 401, { ok: false, error: "Broker sign-in required." });
+    }
     const body = req.body || {};
 
     const facility_name = clean(body.facility_name);

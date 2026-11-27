@@ -1,3 +1,4 @@
+import { requireBroker } from "./_broker_auth.js";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -37,15 +38,18 @@ export default async function handler(req, res) {
   }
 
   try {
-    const email = normalizeEmail(req.query?.email);
+    const adminKey = String(req.headers["x-adbs-admin-key"] || "").trim();
+    const isAdmin = !!process.env.ADBS_ADMIN_KEY && adminKey === process.env.ADBS_ADMIN_KEY;
+    const brokerEmail = isAdmin ? null : await requireBroker(req, supabase);
+    if (!isAdmin && !brokerEmail) return res.status(401).json({ ok: false, error: "Sign-in required." });
+    const email = isAdmin ? normalizeEmail(req.query?.email) : brokerEmail;
+    if (!email) return res.status(400).json({ ok: false, error: "Account email required." });
 
     let linksQuery = supabase
       .from("verify_links")
-      .select("status, created_at, issued_by_email");
+      .select("token, status, created_at, issued_by_email");
 
-    if (email) {
-      linksQuery = linksQuery.eq("issued_by_email", email);
-    }
+    linksQuery = linksQuery.ilike("issued_by_email", email);
 
     const { data: links, error: linksError } = await linksQuery;
 
@@ -71,9 +75,10 @@ export default async function handler(req, res) {
       lower(x.status).includes("active")
     ).length;
 
-    const { data: checks, error: checksError } = await supabase
-      .from("verify_checks")
-      .select("result, created_at, checked_at");
+    const ownedTokens = linkRows.map((x) => x.token).filter(Boolean);
+    const { data: checks, error: checksError } = ownedTokens.length
+      ? await supabase.from("verify_checks").select("result, created_at, checked_at").in("token", ownedTokens)
+      : { data: [], error: null };
 
     if (checksError) {
       return res.status(500).json({

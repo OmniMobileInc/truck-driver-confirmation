@@ -15,6 +15,8 @@ export default function DockPortal() {
   const [ready, setReady] = useState(false);
   const [installPrompt, setInstallPrompt] = useState(null);
   const [recoveryMode, setRecoveryMode] = useState(false);
+  const verificationToken = new URLSearchParams(window.location.search).get("t");
+  const [facility, setFacility] = useState("");
   const [notice, setNotice] = useState("");
 
   useEffect(() => {
@@ -32,9 +34,14 @@ export default function DockPortal() {
 
   useEffect(() => {
     if (!session) { setData(null); return; }
+    if (verificationToken) {
+      window.location.replace("/v.html?t=" + encodeURIComponent(verificationToken));
+      return;
+    }
     let active = true;
+    setData(null);
     setBusy(true);
-    fetch("/api/facility_queue", { headers: { Authorization: "Bearer " + session.access_token } })
+    fetch("/api/facility_queue" + (facility ? "?facility_id=" + encodeURIComponent(facility) : ""), { headers: { Authorization: "Bearer " + session.access_token } })
       .then(async response => {
         const result = await response.json();
         if (!response.ok) throw Error(result.error || "Queue unavailable");
@@ -44,9 +51,9 @@ export default function DockPortal() {
       .catch(err => { if (active) { setData(null); setError(err.message); } })
       .finally(() => { if (active) setBusy(false); });
     return () => { active = false; };
-  }, [session]);
+  }, [session, verificationToken, facility]);
 
-  const style = { minHeight: "100vh", padding: "clamp(22px,5vw,55px)", color: "#f2f6fa", background: "linear-gradient(140deg,#101923,#1c344c)", fontFamily: "Arial,sans-serif" };
+  const style = { minHeight: "100vh", width: "100%", minWidth: 0, boxSizing: "border-box", padding: "clamp(22px,5vw,55px)", color: "#f2f6fa", background: "linear-gradient(140deg,#101923,#1c344c)", fontFamily: "Arial,sans-serif" };
   const input = { display: "block", width: "100%", boxSizing: "border-box", padding: 14, margin: "8px 0 18px", borderRadius: 8, border: "1px solid #6385a3", background: "#f7fafd", color: "#15283d", fontSize: 17 };
   const button = { padding: "13px 22px", border: "1px solid #87b6e0", borderRadius: 8, background: "#21649c", color: "white", fontSize: 16, fontWeight: 700, cursor: "pointer" };
 
@@ -73,9 +80,9 @@ export default function DockPortal() {
   if (!supabase) return <main style={style}><h1>QueCab AdbS™ — Dock Portal</h1><p>Setup pending: configure Supabase public URL and anon key.</p></main>;
 
   return <main style={style}>
-    <div style={{ maxWidth: 1050, margin: "0 auto" }}>
+    <div style={{ maxWidth: 1050, minWidth: 0, width: "100%", boxSizing: "border-box", margin: "0 auto" }}>
       <div role="banner" style={{ position: "static", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: 10, borderBottom: "1px solid #486782", padding: "12px 0 24px", marginBottom: 32, width: "100%", boxSizing: "border-box" }}>
-        <img src="/qc-logo.png" alt="QueCab AdbS" style={{ display: "block", width: 120, maxWidth: "40%", height: "auto", objectFit: "contain" }} />
+        <img src="/qc-logo.png" alt="QueCab AdbS" style={{ display: "block", width: 220, maxWidth: "70%", height: "auto", objectFit: "contain" }} />
         <div style={{ fontSize: 14, letterSpacing: 3, color: "#91caff", fontWeight: 800 }}>SECURE FACILITY ACCESS</div>
         <h1 style={{ fontSize: "clamp(28px,4vw,44px)", margin: 0, lineHeight: 1.2, overflowWrap: "anywhere" }}>QueCab AdbS™ — Dock Portal</h1>
         <p style={{ color: "#c3d4e5", margin: 0 }}>The Broker's Eyes at the Dock™</p>
@@ -101,9 +108,14 @@ export default function DockPortal() {
             <button style={button} onClick={() => supabase.auth.signOut()}>Sign Out</button>
           </div>
           {busy && <p>Loading your facility's assigned loads…</p>}
-          {data && <><p>Facility: <strong>{data.facility_id}</strong></p>
+          {data && <>
+            <label> Facility{" "}
+              <select value={data.facility_id} onChange={event => setFacility(event.target.value)}>
+                {data.facilities.map(id => <option key={id} value={id}>{id}</option>)}
+              </select>
+            </label>
             <div style={{ overflowX: "auto" }}>
-              <table style={{ borderSpacing: "0 12px", width: "100%", textAlign: "left" }}>
+              <table style={{ borderSpacing: "0 12px", width: "100%", tableLayout: "fixed", overflowWrap: "anywhere", textAlign: "left" }}>
                 <thead><tr><th>Load ID</th><th>Carrier</th><th>Status</th><th>Verification</th></tr></thead>
                 <tbody>{data.loads.map(load => <tr key={load.token}><td>{load.load_id || "—"}</td><td>{load.carrier_company || "—"}</td><td>{load.status}</td><td><a style={{ color: "#9bc8ff" }} href={"/v.html?t=" + encodeURIComponent(load.token)}>Open verification</a></td></tr>)}</tbody>
               </table>

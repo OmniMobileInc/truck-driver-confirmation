@@ -1,4 +1,7 @@
+import { verificationUrl } from "./_app_origin.js";
+import { requireBroker } from "./_broker_auth.js";
 import crypto from "crypto";
+import QRCode from "qrcode";
 import { createClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
 
@@ -7,7 +10,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+
 
 function json(res, code, obj) {
   res.status(code);
@@ -42,15 +45,6 @@ function makeToken() {
   return crypto.randomBytes(18).toString("base64url");
 }
 
-function buildVerifyUrl(token) {
-  return `https://quecabadbs.com/v.html?t=${encodeURIComponent(token)}&cv=4`;
-}
-
-function buildQrUrl(text) {
-  return `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(
-    text || ""
-  )}`;
-}
 
 function monthStartIso() {
   const d = new Date();
@@ -96,7 +90,7 @@ async function enforceMonthlyLimit(brokerEmail) {
 
   const isInternal = safe(broker.account_type).toLowerCase() === "internal";
 
-  if (isInternal) {
+  if (isInternal || safe(broker.subscription_status).toLowerCase() === "internal") {
     return {
       ok: true,
       unlimited: true
@@ -105,9 +99,7 @@ async function enforceMonthlyLimit(brokerEmail) {
 
   const status = safe(broker.subscription_status).toLowerCase();
 
-  const paid =
-    status === "paid_active" ||
-    status === "beta_active";
+  const paid = ["paid_active", "beta_active", "trial_active", "active", "trialing"].includes(status);
 
   if (!paid) {
     return {
@@ -158,17 +150,20 @@ async function enforceMonthlyLimit(brokerEmail) {
   };
 }
 
+function escapeHtml(value) {
+  return safe(value).replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
 function buildEmailHtml({
   loadId,
   verifyUrl,
   driverPhone,
-  usdot,
-  plate,
   expiresAt
 }) {
   const cleanPhone = formatPhone(driverPhone);
   const telPhone = digits(driverPhone);
-  const qrUrl = buildQrUrl(verifyUrl);
+
 
   return `
     <div style="font-family:Arial,sans-serif;background:#0b0f14;color:#fff;padding:20px;">
@@ -180,7 +175,7 @@ function buildEmailHtml({
 
       <div style="margin:18px 0;padding:16px;background:#121923;border-radius:12px;">
         <div style="margin-bottom:8px;">
-          <strong>Load ID:</strong> ${safe(loadId) || "(not provided)"}
+          <strong>Load ID:</strong> ${escapeHtml(loadId) || "(not provided)"}
         </div>
 
         <div style="margin-bottom:8px;">
@@ -192,12 +187,9 @@ function buildEmailHtml({
           }
         </div>
 
-        <div style="margin-bottom:8px;">
-          <strong>USDOT#:</strong> ${safe(usdot) || "(not provided)"}
-        </div>
-
-        <div style="margin-bottom:8px;">
-          <strong>Plate:</strong> ${safe(plate) || "(not provided)"}
+        <div style="margin-bottom:8px;color:#cbd7e8;">
+          Read the USDOT number and license plate directly from the truck.
+          Do not copy these values from paperwork or carrier communications.
         </div>
 
         <div>
@@ -212,9 +204,9 @@ function buildEmailHtml({
           Scan AdbS QR Code
         </div>
 
-        <a href="${verifyUrl}" style="display:inline-block;">
+        <a href="${escapeHtml(verifyUrl)}" style="display:inline-block;">
           <img
-            src="${qrUrl}"
+            src="cid:adbs-verify-qr"
             alt="AdbS QR Code"
             width="260"
             height="260"
@@ -225,7 +217,7 @@ function buildEmailHtml({
 
       <div style="margin:24px 0;text-align:center;">
         <a
-          href="${verifyUrl}"
+          href="${escapeHtml(verifyUrl)}"
           style="
             display:inline-block;
             padding:14px 18px;
@@ -241,7 +233,7 @@ function buildEmailHtml({
       </div>
 
       <div style="word-break:break-all;font-size:13px;color:#9fb3c8;">
-        ${verifyUrl}
+        ${escapeHtml(verifyUrl)}
       </div>
 
       <p style="margin-top:28px;color:#8b98a8;">
@@ -256,8 +248,6 @@ async function sendDockEmail({
   loadId,
   verifyUrl,
   driverPhone,
-  usdot,
-  plate,
   expiresAt
 }) {
   const from = process.env.ADBS_EMAIL_FROM;
@@ -284,25 +274,28 @@ async function sendDockEmail({
   }
 
   try {
+    const resend = new Resend(process.env.RESEND_API_KEY);
     const result = await resend.emails.send({
       from,
       to: [safe(to)],
       subject: `Truck-Driver Verification Required — ${loadId || "Load"}`,
+      attachments: [{
+        filename: "adbs-verification.png",
+        content: await QRCode.toBuffer(verifyUrl, { width: 260 }),
+        inlineContentId: "adbs-verify-qr"
+      }],
       html: buildEmailHtml({
         loadId,
         verifyUrl,
         driverPhone,
-        usdot,
-        plate,
         expiresAt
       })
     });
 
-    return {
-      ok: true,
-      resend_id: result?.data?.id || "",
-      raw: result
-    };
+    if (result?.error || !result?.data?.id) {
+      return { ok: false, error: "Email delivery request failed" };
+    }
+    return { ok: true, resend_id: result.data.id };
   } catch (err) {
     return {
       ok: false,
@@ -325,7 +318,12 @@ export default async function handler(req, res) {
         ? JSON.parse(req.body)
         : req.body || {};
 
-    const issued_by_email = safe(body.issued_by_email).toLowerCase();
+    const issued_by_email = await requireBroker(req, supabase);
+    if (!issued_by_email) return json(res, 401, { ok: false, error: "Broker sign-in required." });
+
+    if (body.broker_acknowledged !== true) {
+      return json(res, 400, { ok: false, error: "Broker integrity acknowledgment is required." });
+    }
 
     const limitCheck = await enforceMonthlyLimit(issued_by_email);
 
@@ -342,6 +340,14 @@ export default async function handler(req, res) {
     const dock_email = safe(body.dock_email).toLowerCase();
     const facility_id = safe(body.facility_id);
 
+    if (!facility_id) {
+      return json(res, 400, { ok: false, error: "Enter the assigned Facility ID." });
+    }
+    const { data: facility, error: facilityError } = await supabase.from("adbs_facilities")
+      .select("facility_id").eq("facility_id", facility_id).eq("status", "active").maybeSingle();
+    if (facilityError) return json(res, 503, { ok: false, error: "Facility lookup unavailable." });
+    if (!facility) return json(res, 400, { ok: false, error: "Enter an active Facility ID." });
+
     const carrier_company = safe(body.carrier_company);
     const dispatch_contact = safe(body.dispatch_contact);
     const dispatch_phone = formatPhone(body.dispatch_phone);
@@ -351,8 +357,6 @@ export default async function handler(req, res) {
     const usdot_on_record = digits(body.usdot_on_record);
     const plate_on_record = upper(body.plate_on_record);
 
-    const dock_pin = digits(body.dock_pin).slice(0, 6);
-
     const starts_at = body.starts_at || new Date().toISOString();
 
     const expires_at =
@@ -360,35 +364,42 @@ export default async function handler(req, res) {
         ? null
         : body.expires_at;
 
-    if (!usdot_on_record) {
+    if (!Number.isFinite(Date.parse(starts_at)) ||
+        (expires_at != null && (!Number.isFinite(Date.parse(expires_at)) ||
+          Date.parse(expires_at) <= Math.max(Date.parse(starts_at), Date.now())))) {
+      return json(res, 400, { ok: false, error: "Expiration must be after the start time and in the future." });
+    }
+
+    if (!usdot_on_record || usdot_on_record.length > 12) {
       return json(res, 400, {
         ok: false,
         error: "USDOT# is required"
       });
     }
 
-    if (!plate_on_record) {
+    if (!plate_on_record || plate_on_record.length > 32) {
       return json(res, 400, {
         ok: false,
         error: "Plate is required"
       });
     }
 
-    if (digits(driver_phone).length !== 10) {
+    if (digits(body.driver_phone).length !== 10) {
       return json(res, 400, {
         ok: false,
         error: "Driver phone is required"
       });
     }
 
-    const verify_url = buildVerifyUrl(token);
+    const verify_url = verificationUrl(token);
 
     const payload = {
       token,
       issued_by_email,
+      broker_acknowledged_at: new Date().toISOString(),
       load_id,
       dock_email,
-      facility_id: facility_id || null,
+      facility_id,
 
       carrier_company,
       dispatch_contact,
@@ -399,24 +410,18 @@ export default async function handler(req, res) {
       usdot_on_record,
       plate_on_record,
 
-      dock_pin: dock_pin || null,
-
       status: "active",
 
       starts_at,
       expires_at
     };
 
-    const { data, error } = await supabase
-      .from("verify_links")
-      .insert(payload)
-      .select("*")
-      .single();
+    const { error } = await supabase.from("verify_links").insert(payload);
 
     if (error) {
       return json(res, 500, {
         ok: false,
-        error: error.message || "Could not create verification"
+        error: "Could not create verification"
       });
     }
 
@@ -430,8 +435,6 @@ export default async function handler(req, res) {
         loadId: load_id,
         verifyUrl: verify_url,
         driverPhone: driver_phone,
-        usdot: usdot_on_record,
-        plate: plate_on_record,
         expiresAt: expires_at
       });
 
@@ -459,14 +462,12 @@ export default async function handler(req, res) {
 
       email_status,
       email_error,
-      resend_id,
-
-      row: data
+      resend_id
     });
   } catch (err) {
     return json(res, 500, {
       ok: false,
-      error: err?.message || "Server error"
+      error: "Server error"
     });
   }
 }

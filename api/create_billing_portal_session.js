@@ -1,12 +1,11 @@
+import { requireBroker } from "./_broker_auth.js";
+import { appOrigin } from "./_app_origin.js";
+
 function json(res, code, obj) {
   res.statusCode = code;
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   res.setHeader("Cache-Control", "no-store");
   res.end(JSON.stringify(obj));
-}
-
-function normalizeEmail(v) {
-  return String(v || "").trim().toLowerCase();
 }
 
 export default async function handler(req, res) {
@@ -50,19 +49,8 @@ export default async function handler(req, res) {
     const stripe = new Stripe(stripeKey);
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const body =
-      typeof req.body === "string"
-        ? JSON.parse(req.body || "{}")
-        : req.body || {};
-
-    const email = normalizeEmail(body.email);
-
-    if (!email) {
-      return json(res, 400, {
-        ok: false,
-        error: "Missing email."
-      });
-    }
+    const email = await requireBroker(req, supabase, { requireSubscription: false });
+    if (!email) return json(res, 401, { ok: false, error: "Broker sign-in required." });
 
     const { data, error } = await supabase
       .from("broker_accounts")
@@ -93,7 +81,7 @@ export default async function handler(req, res) {
 
     const session = await stripe.billingPortal.sessions.create({
       customer: data.stripe_customer_id,
-      return_url: "https://quecabadbs.com/account"
+      return_url: new URL("/account", appOrigin()).href
     });
 
     return json(res, 200, {
