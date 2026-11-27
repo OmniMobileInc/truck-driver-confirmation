@@ -1,3 +1,4 @@
+import { verificationUrl } from "./_app_origin.js";
 import { requireBroker } from "./_broker_auth.js";
 import { createClient } from "@supabase/supabase-js";
 
@@ -16,13 +17,6 @@ function safeStr(v) {
   return String(v ?? "").trim();
 }
 
-function buildVerifyUrl(req, token) {
-  const origin =
-    (req.headers["x-forwarded-proto"] ? `${req.headers["x-forwarded-proto"]}://` : "https://") +
-    (req.headers["x-forwarded-host"] || req.headers.host || "localhost");
-
-  return `${origin}/v.html?t=${token}&cv=4`;
-}
 
 function effectiveStatus(row) {
   const status = String(row.status || "active").toLowerCase();
@@ -69,7 +63,7 @@ export default async function handler(req, res) {
     const rows = (Array.isArray(data) ? data : []).map((row) => ({
       token: row.token || "",
       verification_id: row.token || "",
-      verify_url: buildVerifyUrl(req, row.token || ""),
+      verify_url: verificationUrl(row.token || ""),
       load_id: row.load_id || "",
       status: effectiveStatus(row),
       created_at: row.created_at || "",

@@ -1,3 +1,4 @@
+import { getDockUser } from "./_dock_auth.js";
 import { createClient } from "@supabase/supabase-js";
 const admin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 const reply=(res,code,data)=>{res.setHeader("Cache-Control","no-store");return res.status(code).json(data)};
@@ -11,12 +12,9 @@ function effectiveStatus(row) {
 
 export default async function handler(req,res){
   if(req.method!=="GET")return reply(res,405,{error:"Method not allowed"});
-  const bearer=String(req.headers.authorization||"");
-  if(!bearer.startsWith("Bearer "))return reply(res,401,{error:"Sign in required"});
-  const token=bearer.slice(7);
-  const {data:{user}={},error:authError}=await admin.auth.getUser(token);
-  if(authError||!user)return reply(res,401,{error:"Session expired"});
-  const {data:memberships,error:memberError}=await admin.from("adbs_facility_members").select("facility_id").eq("user_id",user.id);
+  const user = await getDockUser(req, admin);
+  if(!user)return reply(res,401,{error:"Sign in required"});
+  const {data:memberships,error:memberError}=await admin.from("adbs_facility_members").select("facility_id").eq("user_id",user.id).order("facility_id");
   if(memberError)return reply(res,503,{error:"Facility access is not configured"});
   const ids=(memberships||[]).map(m=>m.facility_id);
   if(!ids.length)return reply(res,403,{error:"No facility access assigned. Contact your facility administrator."});

@@ -417,6 +417,7 @@ export default function LiveSessions() {
                 Expires: <b>{record.expires_at ? fmtDate(record.expires_at) : "No Expire"}</b><br />
                 Dock Email: <b>{fmt(record.dock_email)}</b><br />
                 Driver Phone: <b>{fmt(record.driver_phone)}</b><br />
+                Broker Acknowledgment: <b>{record.broker_acknowledged_at ? fmtDate(record.broker_acknowledged_at) : "Not recorded"}</b><br />
                 Assigned USDOT#: <b>{fmt(record.usdot_on_record)}</b><br />
                 Assigned Plate: <b>{fmt(record.plate_on_record)}</b><br />
                 Carrier Company: <b>{fmt(record.carrier_company)}</b><br />
@@ -435,6 +436,8 @@ export default function LiveSessions() {
                         <div style={{ fontWeight: 900, marginBottom: 6 }}>{shortResult(a.result)}</div>
                         <div style={{ fontSize: 14, lineHeight: 1.6 }}>
                           Time: <b>{fmtDate(pickTime(a))}</b><br />
+                          Dock Employee: <b>{fmt(a.dock_employee_email || a.dock_employee_id)}</b><br />
+                          Dock Certified: <b>{a.dock_certified_at ? fmtDate(a.dock_certified_at) : "Not recorded"}</b><br />
                           Entered DOT: <b>{fmt(a.entered_usdot)}</b><br />
                           Entered Plate: <b>{fmt(a.entered_plate)}</b><br />
                           Driver Answered: <b>{String(a.driver_answered)}</b><br />

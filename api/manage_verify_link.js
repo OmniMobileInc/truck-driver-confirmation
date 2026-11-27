@@ -1,3 +1,4 @@
+import { verificationUrl } from "./_app_origin.js";
 import { requireBroker } from "./_broker_auth.js";
 import { createClient } from "@supabase/supabase-js";
 
@@ -49,13 +50,6 @@ function tokenFromAny(raw) {
   return s;
 }
 
-function buildVerifyUrl(req, token) {
-  const origin =
-    (req.headers["x-forwarded-proto"] ? `${req.headers["x-forwarded-proto"]}://` : "https://") +
-    (req.headers["x-forwarded-host"] || req.headers.host || "localhost");
-
-  return `${origin}/v.html?t=${token}&cv=4`;
-}
 
 async function fetchAttemptsForToken(token) {
   const { data, error } = await supabase
@@ -76,11 +70,11 @@ function summarizeResult(attempts, status) {
   return safeStr(status || "active");
 }
 
-function compactRow(req, link, attempts = []) {
+function compactRow(link, attempts = []) {
   return {
     token: link.token,
     verification_id: link.token,
-    verify_url: buildVerifyUrl(req, link.token),
+    verify_url: verificationUrl(link.token),
     load_id: safeStr(link.load_id),
     status: effectiveStatus(link),
     result_summary: summarizeResult(attempts, link.status),
@@ -209,7 +203,7 @@ export default async function handler(req, res) {
       const compactRows = [];
       for (const row of rows) {
         const attempts = await fetchAttemptsForToken(row.token);
-        compactRows.push(compactRow(req, row, attempts));
+        compactRows.push(compactRow(row, attempts));
       }
 
       return json(res, 200, {
@@ -235,7 +229,7 @@ export default async function handler(req, res) {
       return json(res, 200, {
         ok: true,
         token: link.token,
-        verify_url: buildVerifyUrl(req, link.token),
+        verify_url: verificationUrl(link.token),
         status: effectiveStatus(link),
         expires_at: link.expires_at || null,
         load_id: link.load_id || "",
@@ -247,6 +241,7 @@ export default async function handler(req, res) {
         carrier_contact_name: link.dispatch_contact || "",
         carrier_contact_phone: link.dispatch_phone || "",
         created_at: link.created_at || "",
+        broker_acknowledged_at: link.broker_acknowledged_at || null,
         attempts
       });
     }
@@ -274,6 +269,9 @@ export default async function handler(req, res) {
       if (status === "active") {
         if (current !== "revoked") {
           return json(res, 409, { ok: false, error: "Only revoked verifications may be reactivated." });
+        }
+        if (!owned.broker_acknowledged_at || !owned.facility_id) {
+          return json(res, 409, { ok: false, error: "Issue a new verification with a facility and broker acknowledgment." });
         }
         const attempts = await fetchAttemptsForToken(token);
         if (attempts.length) {

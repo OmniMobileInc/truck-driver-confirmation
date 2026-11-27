@@ -15,6 +15,8 @@ export default function DockPortal() {
   const [ready, setReady] = useState(false);
   const [installPrompt, setInstallPrompt] = useState(null);
   const [recoveryMode, setRecoveryMode] = useState(false);
+  const verificationToken = new URLSearchParams(window.location.search).get("t");
+  const [facility, setFacility] = useState("");
   const [notice, setNotice] = useState("");
 
   useEffect(() => {
@@ -32,9 +34,14 @@ export default function DockPortal() {
 
   useEffect(() => {
     if (!session) { setData(null); return; }
+    if (verificationToken) {
+      window.location.replace("/v.html?t=" + encodeURIComponent(verificationToken));
+      return;
+    }
     let active = true;
+    setData(null);
     setBusy(true);
-    fetch("/api/facility_queue", { headers: { Authorization: "Bearer " + session.access_token } })
+    fetch("/api/facility_queue" + (facility ? "?facility_id=" + encodeURIComponent(facility) : ""), { headers: { Authorization: "Bearer " + session.access_token } })
       .then(async response => {
         const result = await response.json();
         if (!response.ok) throw Error(result.error || "Queue unavailable");
@@ -44,7 +51,7 @@ export default function DockPortal() {
       .catch(err => { if (active) { setData(null); setError(err.message); } })
       .finally(() => { if (active) setBusy(false); });
     return () => { active = false; };
-  }, [session]);
+  }, [session, verificationToken, facility]);
 
   const style = { minHeight: "100vh", width: "100%", minWidth: 0, boxSizing: "border-box", padding: "clamp(22px,5vw,55px)", color: "#f2f6fa", background: "linear-gradient(140deg,#101923,#1c344c)", fontFamily: "Arial,sans-serif" };
   const input = { display: "block", width: "100%", boxSizing: "border-box", padding: 14, margin: "8px 0 18px", borderRadius: 8, border: "1px solid #6385a3", background: "#f7fafd", color: "#15283d", fontSize: 17 };
@@ -101,7 +108,12 @@ export default function DockPortal() {
             <button style={button} onClick={() => supabase.auth.signOut()}>Sign Out</button>
           </div>
           {busy && <p>Loading your facility's assigned loads…</p>}
-          {data && <><p>Facility: <strong>{data.facility_id}</strong></p>
+          {data && <>
+            <label> Facility{" "}
+              <select value={data.facility_id} onChange={event => setFacility(event.target.value)}>
+                {data.facilities.map(id => <option key={id} value={id}>{id}</option>)}
+              </select>
+            </label>
             <div style={{ overflowX: "auto" }}>
               <table style={{ borderSpacing: "0 12px", width: "100%", tableLayout: "fixed", overflowWrap: "anywhere", textAlign: "left" }}>
                 <thead><tr><th>Load ID</th><th>Carrier</th><th>Status</th><th>Verification</th></tr></thead>

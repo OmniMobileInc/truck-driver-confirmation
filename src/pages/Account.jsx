@@ -252,8 +252,7 @@ export default function Account() {
     try {
       const res = await fetch("/api/create_billing_portal_session", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email })
+        headers: { "x-adbs-broker-email": getAuthEmail(), "x-adbs-broker-code": getAuthCode() }
       });
 
       const data = await res.json().catch(() => ({}));

@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+<meta name="referrer" content="no-referrer">
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>AdbS Truck-Driver Verification</title>
@@ -331,7 +332,7 @@ color:#fff;
 
 <body>
 
-<button id="themeToggle" class="themeToggle" type="button" onclick="toggleTheme()" aria-label="Switch color theme">☀️ Light</button>
+<button id="themeToggle" class="themeToggle" type="button" aria-label="Switch color theme">☀️ Light</button>
 
 <div class="container" id="appContainer">
 
@@ -358,17 +359,21 @@ Complete verification before releasing the load.
 <div class="answerTitle">Did the driver answer the phone?</div>
 
 <div class="answerGrid">
-<button id="yesBtn" class="answerBtn" type="button" onclick="setAnswered(true)">YES</button>
-<button id="noBtn" class="answerBtn" type="button" onclick="setAnswered(false)">NO</button>
+<button id="yesBtn" class="answerBtn" type="button">YES</button>
+<button id="noBtn" class="answerBtn" type="button">NO</button>
 </div>
 
 </div>
 
-<button class="mainBtn" onclick="verify()">Verify Truck-Driver</button>
+<label>
+  <input type="checkbox" id="dock-certified" style="width:auto">
+  I certify that I personally read the USDOT number and plate from the truck at the dock, called the listed driver number, and accurately recorded whether the driver answered.
+</label>
+<button id="verifyButton" class="mainBtn" type="button" disabled>Verify Truck-Driver</button>
 
-<div id="result" class="result"></div>
+<div id="result" class="result" role="status"></div>
 
-<div class="soundToggle" onclick="toggleSound()">
+<div id="soundToggle" class="soundToggle">
 🔊 Alert Sound: <span id="soundState">ON</span>
 </div>
 
@@ -413,10 +418,16 @@ QueCab AdbS — Developed by Omnimobile Inc. for QueCab Inc.
 <source src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg">
 </audio>
 
-<script>
+<script type="module">
+import { createClient } from "@supabase/supabase-js";
+
+const url = import.meta.env.VITE_SUPABASE_URL;
+const anon = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabase = url && anon ? createClient(url, anon) : null;
+const verifyButton = document.getElementById("verifyButton");
+let canSubmit = false;
 let soundEnabled=true
 let driverAnswered=null
-let verificationRevoked=false
 
 function preferredTheme(){
 const saved=localStorage.getItem("qc_theme")
@@ -514,169 +525,132 @@ document.body.innerHTML = `
 `;
 }
 
-function showUnavailableScreen(status){
-  const pending=status==="pending";
-  document.body.innerHTML = `<div class="revokedWrap"><div class="revokedBox"><div class="revokedTitle">⚠️ VERIFICATION ${pending?"NOT YET ACTIVE":"EXPIRED"}</div><div class="revokedSub">DO NOT LOAD — CONTACT THE BROKER</div></div></div>`;
+function showCaution(message) {
+  const result = document.getElementById("result");
+  result.innerText = message;
+  result.className = "result caution";
 }
 
-async function loadDriverPhone(){
-const token=getToken()
-if(!token)return
-
-try{
-const res=await fetch("/api/verification_state?token="+encodeURIComponent(token),{
-method:"GET"
-})
-
-const data=await res.json()
-
-if(res.ok){
-if(String(data.status||"").toLowerCase()==="locked"){
-showLockedScreen()
-return
+async function dockHeaders(token) {
+  if (!supabase) throw new Error("Dock sign-in unavailable. Do not load.");
+  const { data } = await supabase.auth.getSession();
+  if (!data?.session) {
+    window.location.replace("/dock?t=" + encodeURIComponent(token));
+    return null;
+  }
+  return { Authorization: "Bearer " + data.session.access_token };
 }
 
-if(String(data.status||"").toLowerCase()==="revoked"){
-verificationRevoked=true
-showRevokedScreen()
-return
+async function loadDriverPhone() {
+  const token = getToken();
+  if (!token) return showCaution("Missing verification ID. Do not load.");
+
+  try {
+    const headers = await dockHeaders(token);
+    if (!headers) return;
+    const res = await fetch("/api/verification_state?token=" + encodeURIComponent(token), { headers });
+    if (res.status === 401) {
+      await supabase.auth.signOut({ scope: "local" });
+      window.location.replace("/dock?t=" + encodeURIComponent(token));
+      return;
+    }
+    const data = await res.json();
+    if (!res.ok) return showCaution(data.error || "Verification unavailable. Do not load.");
+
+    if (data.status === "locked") return showLockedScreen();
+    if (data.status === "revoked") return showRevokedScreen();
+    if (["cleared", "completed"].includes(data.status)) return showCompletedScreen();
+    if (data.status !== "active") {
+      const message = {
+        pending: "Verification has not opened yet.",
+        expired: "Verification expired.",
+        unacknowledged: "Ask the broker to issue a new verification with an integrity acknowledgment."
+      }[data.status] || "Verification unavailable.";
+      return showCaution(message + " Do not load.");
+    }
+
+    renderPhone(data.driver_phone);
+    canSubmit = true;
+    verifyButton.disabled = false;
+  } catch (error) {
+    showCaution("Verification unavailable. Do not load.");
+  }
 }
 
-if(["cleared","completed"].includes(String(data.status||"").toLowerCase())){
-showCompletedScreen()
-return
+async function verify() {
+  if (!canSubmit || verifyButton.disabled) return;
+  const certification = document.getElementById("dock-certified");
+  const token = getToken();
+  const entered_usdot = document.getElementById("usdot").value.trim();
+  const entered_plate = document.getElementById("plate").value.trim();
+  if (!entered_usdot || !entered_plate || driverAnswered === null || !certification.checked) {
+    return showCaution("Enter the truck identifiers, record the driver’s answer, and certify your observations.");
+  }
+
+  const result = document.getElementById("result");
+  document.body.classList.remove("flash");
+  verifyButton.disabled = true;
+  result.textContent = "Checking verification…";
+
+  try {
+    const headers = await dockHeaders(token);
+    if (!headers) return;
+    const res = await fetch("/api/verify_driver", {
+      method: "POST",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token,
+        entered_usdot,
+        entered_plate,
+        driver_answered: driverAnswered,
+        dock_certified: certification.checked
+      })
+    });
+    const data = await res.json();
+    if (res.status === 401) {
+      canSubmit = false;
+      await supabase.auth.signOut({ scope: "local" });
+      window.location.replace("/dock?t=" + encodeURIComponent(token));
+      return;
+    }
+
+    if (data.locked) { canSubmit = false; return showLockedScreen(); }
+    if (data.completed) { canSubmit = false; return showCompletedScreen(); }
+    if (!res.ok) {
+      if ([404, 409, 410].includes(res.status)) canSubmit = false;
+      return showCaution((data.error || "Verification unavailable.") + " Do not load.");
+    }
+
+    certification.checked = false;
+    setAnswered(null);
+    document.getElementById("carrierCompany").textContent = data.carrier_company || "(not provided)";
+    document.getElementById("carrierContact").textContent = data.carrier_contact_name || "(not provided)";
+    document.getElementById("carrierPhone").textContent = data.carrier_contact_phone || "(not provided)";
+    document.getElementById("verificationId").textContent = data.verification_id || "(unknown)";
+    document.getElementById("verificationTime").textContent = formatLocalTimestamp(data.verified_at);
+    document.getElementById("authority").style.display = "block";
+
+    if (data.result === "CLEAR_TO_LOAD") {
+      canSubmit = false;
+      result.innerText = "CLEAR TO LOAD";
+      result.className = "result clear";
+    } else {
+      document.body.classList.add("flash");
+      if (soundEnabled) document.getElementById("alertSound").play().catch(() => {});
+      showCaution("CAUTION — DO NOT LOAD");
+    }
+  } catch {
+    showCaution("Verification unavailable. Do not load.");
+  } finally {
+    verifyButton.disabled = !canSubmit;
+  }
 }
 
-if(["pending","expired"].includes(String(data.status||"").toLowerCase())){
-showUnavailableScreen(String(data.status).toLowerCase())
-return
-}
-
-renderPhone(data.driver_phone||"")
-
-document.getElementById("carrierCompany").innerText=data.carrier_company||"(not provided)"
-document.getElementById("carrierContact").innerText=data.carrier_contact_name||"(not provided)"
-document.getElementById("carrierPhone").innerText=data.carrier_contact_phone||"(not provided)"
-document.getElementById("verificationId").innerText=data.token||"(unknown)"
-
-document.getElementById("authority").style.display="block"
-}
-}catch{}
-}
-
-async function verify(){
-if(verificationRevoked){
-showRevokedScreen()
-return
-}
-
-document.body.classList.remove("flash")
-
-const token=getToken()
-const usdot=document.getElementById("usdot").value.trim()
-
-const plateInput=document.getElementById("plate")
-const plate=plateInput.value.trim().toUpperCase()
-
-plateInput.value=plate
-
-const result=document.getElementById("result")
-
-if(driverAnswered===null){
-result.innerText="Select YES or NO for phone answer"
-result.className="result caution"
-return
-}
-
-try{
-const detailRes=await fetch("/api/verification_state?token="+encodeURIComponent(token),{
-method:"GET"
-})
-const detailData=await detailRes.json().catch(()=>({}))
-
-if(detailRes.ok && String(detailData.status||"").toLowerCase()==="locked"){
-showLockedScreen()
-return
-}
-
-if(detailRes.ok && String(detailData.status||"").toLowerCase()==="revoked"){
-verificationRevoked=true
-showRevokedScreen()
-return
-}
-
-
-if(detailRes.ok && ["cleared","completed"].includes(String(detailData.status||"").toLowerCase())){
-showCompletedScreen()
-return
-}
-
-if(detailRes.ok && ["pending","expired"].includes(String(detailData.status||"").toLowerCase())){
-showUnavailableScreen(String(detailData.status).toLowerCase())
-return
-}
-
-const res=await fetch("/api/verify_driver",{
-method:"POST",
-headers:{"Content-Type":"application/json"},
-body:JSON.stringify({
-token,
-entered_usdot:usdot,
-entered_plate:plate,
-driver_answered:driverAnswered
-})
-})
-
-const data=await res.json()
-
-if(!res.ok){
-if(data.locked){
-showLockedScreen()
-return
-}
-if(data.completed){
-showCompletedScreen()
-return
-}
-result.innerText=data.error||"Verification Error"
-result.className="result caution"
-return
-}
-
-if(data.locked){
-showLockedScreen()
-return
-}
-
-renderPhone(data.driver_phone||"")
-
-document.getElementById("carrierCompany").innerText=data.carrier_company||"(not provided)"
-document.getElementById("carrierContact").innerText=data.carrier_contact_name||"(not provided)"
-document.getElementById("carrierPhone").innerText=data.carrier_contact_phone||"(not provided)"
-document.getElementById("verificationId").innerText=data.verification_id||"(unknown)"
-document.getElementById("verificationTime").innerText=formatLocalTimestamp(data.verified_at)
-
-document.getElementById("authority").style.display="block"
-
-if(String(data.result||"").toLowerCase().includes("clear")){
-result.innerText="CLEAR TO LOAD"
-result.className="result clear"
-}else{
-document.body.classList.add("flash")
-
-if(soundEnabled){
-try{document.getElementById("alertSound").play()}catch{}
-}
-
-result.innerText="CAUTION — DO NOT LOAD"
-result.className="result caution"
-}
-}catch{
-result.innerText="Verification Error"
-result.className="result caution"
-}
-}
-
+document.getElementById("themeToggle").addEventListener("click", toggleTheme);
+document.getElementById("yesBtn").addEventListener("click", () => setAnswered(true));
+document.getElementById("noBtn").addEventListener("click", () => setAnswered(false));
+document.getElementById("soundToggle").addEventListener("click", toggleSound);
+verifyButton.addEventListener("click", verify);
 applyTheme(preferredTheme())
 loadDriverPhone()
 </script>

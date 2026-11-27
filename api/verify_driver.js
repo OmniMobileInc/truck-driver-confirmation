@@ -1,3 +1,4 @@
+import { getAssignedDockLink, getDockUser } from "./_dock_auth.js";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -40,11 +41,6 @@ function carrierPayload(link, token, verifiedAt = "") {
   };
 }
 
-function isSuccessfulClosedStatus(status) {
-  const normalized = String(status || "").trim().toLowerCase();
-  return normalized === "cleared" || normalized === "completed";
-}
-
 async function sendAlertEmail(link, token, failedAttempts) {
   try {
     if (!process.env.RESEND_API_KEY) {
@@ -73,21 +69,17 @@ async function sendAlertEmail(link, token, failedAttempts) {
       from: fromEmail,
       to: [toEmail],
       subject: `AdbS ALERT — 3 Failed Verification Attempts [${token}]`,
-      html: `
-        <div style="font-family:Arial,Helvetica,sans-serif;line-height:1.5;color:#111;">
-          <h2>AdbS Alert</h2>
-          <p>Three failed Truck-Driver verification attempts were detected.</p>
-          <p><strong>Load ID:</strong> ${loadId}</p>
-          <p><strong>Verification ID:</strong> ${token}</p>
-          <p><strong>Failed Attempts:</strong> ${failedAttempts}</p>
-          <hr style="margin:18px 0; border:none; border-top:1px solid #ddd;" />
-          <p><strong>Carrier Company:</strong> ${carrierCompany}</p>
-          <p><strong>Carrier Contact:</strong> ${carrierContact}</p>
-          <p><strong>Carrier Contact Phone:</strong> ${carrierPhone}</p>
-          <hr style="margin:18px 0; border:none; border-top:1px solid #ddd;" />
-          <p>Open Control Center and search this Verification ID:</p>
-          <p style="font-size:18px; font-weight:800;">${token}</p>
-        </div>
+      text: `
+Three failed Truck-Driver verification attempts were detected.
+
+Load ID: ${loadId}
+Verification ID: ${token}
+Failed attempts: ${failedAttempts}
+Carrier: ${carrierCompany}
+Carrier contact: ${carrierContact}
+Carrier phone: ${carrierPhone}
+
+Open Control Center and search for the verification ID above.
       `
     });
 
@@ -106,41 +98,6 @@ async function sendAlertEmail(link, token, failedAttempts) {
 
 export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
-  if (req.method === "GET") {
-    try {
-      const token = cleanText(req.query?.token);
-
-      if (!token) {
-        return res.status(400).json({ error: "Missing token" });
-      }
-
-      const { data: link, error } = await supabase
-        .from("verify_links")
-        .select("token,driver_phone,dispatch_phone,carrier_company,dispatch_contact")
-        .eq("token", token)
-        .maybeSingle();
-
-      if (error) {
-        return res.status(500).json({
-          error: "Lookup failed"
-        });
-      }
-
-      if (!link) {
-        return res.status(404).json({ error: "Verification link not found" });
-      }
-
-      return res.status(200).json({
-        ok: true,
-        ...carrierPayload(link, token, "")
-      });
-    } catch (err) {
-      return res.status(500).json({
-        error: "Failed to load verification info"
-      });
-    }
-  }
-
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
@@ -154,25 +111,16 @@ export default async function handler(req, res) {
     }
     const driverAnswered = req.body.driver_answered;
 
-    if (!token) {
-      return res.status(400).json({ error: "Missing token" });
+    if (!token || !enteredDOT || !enteredPlate || enteredDOT.length > 12 || enteredPlate.length > 32) {
+      return res.status(400).json({ error: "Enter the USDOT number and plate as displayed on the truck." });
     }
-
-    const { data: link, error } = await supabase
-      .from("verify_links")
-      .select("*")
-      .eq("token", token)
-      .maybeSingle();
-
-    if (error) {
-      return res.status(500).json({
-        error: "Lookup failed"
-      });
+    const user = await getDockUser(req, supabase);
+    if (!user) return res.status(401).json({ error: "Sign in to the Dock Portal." });
+    if (req.body?.dock_certified !== true) {
+      return res.status(400).json({ error: "Certify your dock observations before submitting." });
     }
-
-    if (!link) {
-      return res.status(404).json({ error: "Verification link not found" });
-    }
+    const link = await getAssignedDockLink(supabase, token, user);
+    if (!link) return res.status(404).json({ error: "Verification not assigned to your facility." });
 
     // All attempt checks, inserts and status changes happen under a single
     // database row lock. The browser cannot bypass the three-strike limit.
@@ -182,7 +130,9 @@ export default async function handler(req, res) {
         p_token: token,
         p_entered_usdot: enteredDOT,
         p_entered_plate: enteredPlate,
-        p_driver_answered: driverAnswered
+        p_driver_answered: driverAnswered,
+        p_dock_user_id: user.id,
+        p_dock_certified: true
       }
     );
 
@@ -192,6 +142,9 @@ export default async function handler(req, res) {
     }
 
     const state = String(attempt?.state || "").toLowerCase();
+    if (state === "forbidden") return res.status(404).json({ error: "Verification not assigned to your facility." });
+    if (state === "uncertified") return res.status(400).json({ error: "Dock certification required." });
+    if (state === "unacknowledged") return res.status(409).json({ error: "Broker acknowledgment required. Ask the broker to issue a new verification." });
     if (state === "not_found") return res.status(404).json({ error: "Verification link not found" });
     if (state === "expired") return res.status(410).json({ error: "Verification expired. Do not release the load." });
     if (state === "pending") return res.status(409).json({ error: "Verification window has not opened." });

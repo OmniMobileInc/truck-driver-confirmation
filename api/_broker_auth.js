@@ -1,6 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 
-export async function requireBroker(req, supabase) {
+export async function requireBroker(req, supabase, { requireSubscription = true } = {}) {
   const email = String(req.headers["x-adbs-broker-email"] || "").trim().toLowerCase();
   const code = String(req.headers["x-adbs-broker-code"] || "").trim().toUpperCase();
   if (!email || !code) return null;
@@ -19,7 +19,7 @@ export async function requireBroker(req, supabase) {
   const sub = String(account.subscription_status || "").toLowerCase();
   const status = String(account.status || "active").toLowerCase();
   if (status !== "active") return null;
-  if (type !== "internal" && sub !== "internal" &&
-    !["beta_active","trial_active","paid_active"].includes(sub)) return null;
+  if (requireSubscription && type !== "internal" && sub !== "internal" &&
+    !["beta_active","trial_active","paid_active","active","trialing"].includes(sub)) return null;
   return String(account.business_email).trim().toLowerCase();
 }

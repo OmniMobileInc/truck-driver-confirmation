@@ -1,3 +1,4 @@
+import QRCode from "qrcode";
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -17,12 +18,6 @@ function formatPhone(v) {
   if (d.length <= 3) return d;
   if (d.length <= 6) return `${d.slice(0, 3)}-${d.slice(3)}`;
   return `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}`;
-}
-
-function buildQrUrl(text) {
-  return `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(
-    text || ""
-  )}`;
 }
 
 function localNowInput() {
@@ -69,7 +64,7 @@ export default function ControlCenter() {
   const [driverPhone, setDriverPhone] = useState("");
   const [usdot, setUsdot] = useState("");
   const [plate, setPlate] = useState("");
-  const [dockPin, setDockPin] = useState("");
+  const [brokerAcknowledged, setBrokerAcknowledged] = useState(false);
 
   const [mode, setMode] = useState("auto");
   const [startAt, setStartAt] = useState(localNowInput());
@@ -84,6 +79,16 @@ export default function ControlCenter() {
 
   const [selected, setSelected] = useState(null);
   const [qrUrl, setQrUrl] = useState("");
+  useEffect(() => {
+    let current = true;
+    setQrUrl("");
+    if (selected?.verify_url) {
+      QRCode.toDataURL(selected.verify_url, { width: 240 })
+        .then(image => { if (current) setQrUrl(image); })
+        .catch(() => {});
+    }
+    return () => { current = false; };
+  }, [selected?.verify_url]);
 
   const [totals, setTotals] = useState(null);
   const [totalsError, setTotalsError] = useState("");
@@ -148,7 +153,7 @@ export default function ControlCenter() {
     const token = row?.token || row?.verification_id || "";
     const verifyUrl =
       row?.verify_url ||
-      `https://quecabadbs.com/v.html?t=${encodeURIComponent(token)}&cv=4`;
+      `${window.location.origin}/v.html?t=${encodeURIComponent(token)}`;
 
     return {
       verification_id: token,
@@ -187,7 +192,7 @@ export default function ControlCenter() {
 
     const next = makeSelected(data);
     setSelected(next);
-    setQrUrl(buildQrUrl(next.verify_url));
+
     setStatusMsg("Verification loaded.");
   }
 
@@ -254,7 +259,7 @@ export default function ControlCenter() {
       driver_phone: formatPhone(driverPhone),
       usdot_on_record: onlyDigits(usdot),
       plate_on_record: upper(plate),
-      dock_pin: onlyDigits(dockPin),
+      broker_acknowledged: brokerAcknowledged,
       starts_at: mode === "pick" ? new Date(startAt).toISOString() : new Date().toISOString(),
       expires_at:
         mode === "none"
@@ -263,6 +268,11 @@ export default function ControlCenter() {
           ? new Date(expireAt).toISOString()
           : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
     };
+
+    if (!payload.facility_id || !brokerAcknowledged) {
+      setErrorMsg("Enter the assigned Facility ID and confirm the broker integrity acknowledgment.");
+      return;
+    }
 
     if (!payload.usdot_on_record) {
       setErrorMsg("Enter USDOT#");
@@ -314,7 +324,7 @@ export default function ControlCenter() {
       });
 
       setSelected(next);
-      setQrUrl(buildQrUrl(next.verify_url));
+
       setStatusMsg("AdbS Verification issued");
 
       setLoadId("");
@@ -326,7 +336,7 @@ export default function ControlCenter() {
       setDriverPhone("");
       setUsdot("");
       setPlate("");
-      setDockPin("");
+      setBrokerAcknowledged(false);
 
       loadDashboardTotals();
       loadRef.current?.focus();
@@ -612,14 +622,17 @@ export default function ControlCenter() {
             <div style={{ display: "grid", gap: 10 }}>
               <input ref={loadRef} style={styles.input} placeholder="Load ID" value={loadId} onChange={(e) => setLoadId(e.target.value)} onKeyDown={handleIssueEnter} />
               <input style={styles.input} placeholder="Shipper Email" value={dockEmail} onChange={(e) => setDockEmail(e.target.value)} onKeyDown={handleIssueEnter} />
-              <input style={styles.input} placeholder="Facility ID (optional)" value={facilityId} onChange={(e) => setFacilityId(e.target.value)} onKeyDown={handleIssueEnter} />
+              <input style={styles.input} placeholder="Assigned Facility ID" value={facilityId} onChange={(e) => setFacilityId(e.target.value)} onKeyDown={handleIssueEnter} />
               <input style={styles.input} placeholder="Carrier Company" value={carrierCompany} onChange={(e) => setCarrierCompany(e.target.value)} onKeyDown={handleIssueEnter} />
               <input style={styles.input} placeholder="Carrier Contact Name" value={carrierContact} onChange={(e) => setCarrierContact(e.target.value)} onKeyDown={handleIssueEnter} />
               <input style={styles.input} placeholder="Carrier Contact Phone" value={carrierPhone} onChange={(e) => setCarrierPhone(formatPhone(e.target.value))} onKeyDown={handleIssueEnter} />
               <input style={styles.input} placeholder="Driver Phone" value={driverPhone} onChange={(e) => setDriverPhone(formatPhone(e.target.value))} onKeyDown={handleIssueEnter} />
               <input style={styles.input} placeholder="USDOT#" value={usdot} onChange={(e) => setUsdot(onlyDigits(e.target.value))} onKeyDown={handleIssueEnter} />
               <input style={styles.input} placeholder="Plate" value={plate} onChange={(e) => setPlate(upper(e.target.value))} onKeyDown={handleIssueEnter} />
-              <input style={styles.input} placeholder="Dock PIN (optional)" value={dockPin} onChange={(e) => setDockPin(onlyDigits(e.target.value))} onKeyDown={handleIssueEnter} />
+              <label>
+                <input type="checkbox" checked={brokerAcknowledged} onChange={e => setBrokerAcknowledged(e.target.checked)} />
+                I confirm that the truck, driver phone, and facility details entered here match the carrier and shipment I authorized. I remain responsible for independent verification and freight-release decisions.
+              </label>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
                 <div style={styles.modeChip(mode === "auto")} onClick={() => setMode("auto")}>Auto 24h</div>
